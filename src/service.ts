@@ -12,6 +12,7 @@ import {
   Answer,
   Question,
   encode,
+  compareAnswers,
 } from 'dns-message';
 
 import { hostname, fingerprint, NetworkBinding } from './nics';
@@ -205,6 +206,17 @@ const answers = (
   ...aaaaAnswers(srv, bindings, ttl),
 ];
 
+const authorities = (
+  srv: ServiceRecord,
+  bindings: NetworkBinding[],
+  ttl: number
+) => [
+  ...aAnswers(srv, bindings, ttl), // 1
+  txtAnswer(srv, ttl), // 16
+  ...aaaaAnswers(srv, bindings, ttl), // 28
+  srvAnswer(srv, ttl), // 33
+];
+
 export const announceMessage = (
   srv: ServiceRecord,
   bindings: NetworkBinding[]
@@ -242,11 +254,7 @@ export const probeMessage = (srv: ServiceRecord, bindings: NetworkBinding[]) =>
         qu: true,
       },
     ],
-    authorities: [
-      srvAnswer(srv, srv.ttl),
-      ...aAnswers(srv, bindings, srv.ttl),
-      ...aaaaAnswers(srv, bindings, srv.ttl),
-    ],
+    authorities: authorities(srv, bindings, srv.ttl),
   });
 
 export const enum ConflictFlag {
@@ -256,6 +264,8 @@ export const enum ConflictFlag {
   HOSTNAME_A = 1 << 1,
   HOSTNAME_AAAA = 1 << 2,
   HOSTNAME = ConflictFlag.HOSTNAME_A | ConflictFlag.HOSTNAME_AAAA,
+
+  LOST_TIEBREAKER = 1 << 3,
 }
 
 const checkAnswerConflicts = (
@@ -334,7 +344,18 @@ export const checkResponseConflicts = (
   return flag;
 };
 
-const checkQuestionConflicts = (
+const compareAuthorities = (a: Answer[], b: Answer[]): number => {
+  const length = a.length < b.length ? a.length : b.length;
+  for (let idx = 0; idx < length; idx++) {
+    const comparison = compareAnswers(a[idx], b[idx]);
+    if (comparison !== 0) {
+      return comparison;
+    }
+  }
+  return a.length !== b.length ? (a.length < b.length ? -1 : 1) : 0;
+};
+
+export const checkQuestionConflicts = (
   packet: Packet,
   srv: ServiceRecord,
   bindings: NetworkBinding[]
@@ -353,9 +374,23 @@ const checkQuestionConflicts = (
       (questionName === srv.host || questionName === srv.fqdnIn)
     );
   });
-  return hasMatchingQuestion
-    ? checkAnswerConflicts(packet.authorities, srv, bindings)
-    : ConflictFlag.NONE;
+  if (!hasMatchingQuestion) {
+    return ConflictFlag.NONE;
+  }
+  const ourAuthorities = authorities(srv, bindings, srv.ttl);
+  const theirAuthorities = packet.authorities
+    .filter(
+      answer =>
+        answer.name?.toLowerCase() === srv.host ||
+        answer.name?.toLowerCase() === srv.fqdnIn
+    )
+    .sort(compareAnswers);
+  const comparison = compareAuthorities(ourAuthorities, theirAuthorities);
+  if (comparison < 0) {
+    return checkAnswerConflicts(packet.authorities, srv, bindings);
+  } else {
+    return ConflictFlag.NONE;
+  }
 };
 
 export const checkConflicts = (
