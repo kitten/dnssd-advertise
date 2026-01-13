@@ -207,7 +207,6 @@ export function createInterfaceAdvertiser(
   }
 
   async function reopen() {
-    scheduler.cancel();
     if (loops++ > MAX_SETUPS) {
       return;
     }
@@ -234,6 +233,7 @@ export function createInterfaceAdvertiser(
     }
   }
 
+  let closed = false;
   return {
     promise: (async () => {
       try {
@@ -245,22 +245,26 @@ export function createInterfaceAdvertiser(
           services.onError(error);
         }
       } finally {
-        socket.close();
+        if (!closed) {
+          socket.close();
+          scheduler.cancel();
+        }
       }
     })(),
     async close() {
       try {
+        closed = true;
         scheduler.cancel();
         if (state !== AdvertiserState.CLOSED) {
           state = AdvertiserState.CLOSED;
           await sendGoodbye();
         }
-        scheduler.cancel();
       } catch (error) {
         if (!AbortError.isAbortError(error)) {
           services.onError(error);
         }
       } finally {
+        scheduler.cancel();
         socket.close();
       }
     },
