@@ -5,7 +5,7 @@ import {
   createInterfaceAdvertiser,
   type AdvertiseParams,
 } from '../advertise';
-import { createScheduler, cancelAll, AbortError } from '../scheduler';
+import { createScheduler, cancelAll, AbortError, TaskKind } from '../scheduler';
 import { createServiceInput, createServiceRecord } from '../service';
 import { IPType } from '../constants';
 import type { Services } from '../constants';
@@ -351,6 +351,101 @@ describe('advertise', () => {
       );
 
       await vi.advanceTimersByTimeAsync(500);
+    });
+
+    it('extends probing when a conflict is detected during probe phase', async () => {
+      const params = createTestParams();
+      const services = createMockServices();
+
+      createInterfaceAdvertiser('en0', params, services);
+
+      await vi.advanceTimersByTimeAsync(300);
+      const initialMessageCount = services.mockSocket.sentMessages.length;
+
+      const conflictPacket = encode({
+        type: PacketType.RESPONSE,
+        flags: PacketFlag.AUTHORITATIVE_ANSWER,
+        answers: [
+          {
+            type: RecordType.SRV,
+            class: RecordClass.IN,
+            name: 'test service._http._tcp.local',
+            ttl: 120,
+            flush: true,
+            data: {
+              priority: 0,
+              weight: 0,
+              port: 9999,
+              target: 'otherhost.local',
+            },
+          },
+        ],
+      });
+
+      await services.mockSocket.simulateMessage(
+        Buffer.from(conflictPacket),
+        '192.168.1.50',
+        5353
+      );
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(services.mockSocket.sentMessages.length).toBeGreaterThan(
+        initialMessageCount + 2
+      );
+    });
+
+    it('adds delay when losing a tiebreaker during probing', async () => {
+      const params = createTestParams();
+      const services = createMockServices();
+      const scheduleSpy = vi.fn();
+
+      const originalCreateScheduler = services.createScheduler;
+      services.createScheduler = () => {
+        const scheduler = originalCreateScheduler();
+        const originalSchedule = scheduler.schedule.bind(scheduler);
+        scheduler.schedule = ((kind: TaskKind, task?: any) => {
+          scheduleSpy(kind);
+          return originalSchedule(kind, task);
+        }) as typeof scheduler.schedule;
+        return scheduler;
+      };
+
+      createInterfaceAdvertiser('en0', params, services);
+
+      await vi.advanceTimersByTimeAsync(300);
+
+      const tiebreakerPacket = encode({
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: 'testhost.local',
+            type: RecordType.ANY,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [
+          {
+            type: RecordType.A,
+            class: RecordClass.IN,
+            name: 'testhost.local',
+            ttl: 120,
+            flush: true,
+            data: '255.255.255.255',
+          },
+        ],
+      });
+
+      await services.mockSocket.simulateMessage(
+        Buffer.from(tiebreakerPacket),
+        '192.168.1.50',
+        5353
+      );
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(scheduleSpy).toHaveBeenCalledWith(TaskKind.DELAY);
     });
   });
 

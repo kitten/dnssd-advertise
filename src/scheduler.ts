@@ -5,6 +5,7 @@ export const enum TaskKind {
   PROBE,
   ANNOUNCE,
   REOPEN,
+  DELAY,
 }
 
 interface Timer {
@@ -28,6 +29,8 @@ const shouldRetry = (kind: TaskKind, attempt: number): boolean => {
       return attempt < 3;
     case TaskKind.REOPEN:
       return true;
+    case TaskKind.DELAY:
+      return false;
   }
 };
 
@@ -41,6 +44,8 @@ const getDelay = (kind: TaskKind, attempt: number): number => {
       return attempt ? 1000 * 2 ** (Math.min(attempt, 3) - 1) : 0;
     case TaskKind.REOPEN:
       return 6000;
+    case TaskKind.DELAY:
+      return 1000;
   }
 };
 
@@ -102,7 +107,7 @@ export interface Task<T> {
 }
 
 export interface Scheduler {
-  schedule<T>(kind: TaskKind, task: Task<T>): Promise<T>;
+  schedule<T>(kind: TaskKind, task?: Task<T>): Promise<T>;
   cancel(): void;
 }
 
@@ -119,7 +124,7 @@ export class AbortError extends Error {
 
 export function createScheduler(): Scheduler {
   const cancelFns = new Set<() => void>();
-  async function schedule<T>(kind: TaskKind, task: Task<T>): Promise<T> {
+  async function schedule<T>(kind: TaskKind, task?: Task<T>): Promise<T> {
     async function schedule(attempt: number, delay = getDelay(kind, attempt)) {
       return new Promise<T>(async (resolve, reject) => {
         const delayMin = Math.max(delay, SCHEDULER_MIN);
@@ -127,14 +132,17 @@ export function createScheduler(): Scheduler {
           cancelFns.delete(onCancel);
           let isRetrying = false;
           try {
-            const result = await task({
-              attempt,
-              async retry(delay) {
-                isRetrying = true;
-                return schedule(attempt + 1, delay);
-              },
-            });
-            resolve(result);
+            let result: T;
+            if (task) {
+              result = await task({
+                attempt,
+                async retry(delay) {
+                  isRetrying = true;
+                  return schedule(attempt + 1, delay);
+                },
+              });
+            }
+            resolve(result!);
           } catch (error) {
             if (!isRetrying && shouldRetry(kind, attempt)) {
               schedule(attempt + 1, delay).then(resolve, reject);

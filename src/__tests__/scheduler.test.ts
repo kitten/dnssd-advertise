@@ -355,6 +355,22 @@ describe('scheduler', () => {
 
       expect(endTime - startTime).toBe(6000);
     });
+
+    it('uses 1000ms delay for DELAY tasks', async () => {
+      const scheduler = createScheduler();
+      const startTime = Date.now();
+      let endTime = 0;
+
+      const promise = scheduler.schedule(TaskKind.DELAY, () => {
+        endTime = Date.now();
+        return 'done';
+      });
+
+      await vi.runAllTimersAsync();
+      await promise;
+
+      expect(endTime - startTime).toBe(1000);
+    });
   });
 
   describe('async task handling', () => {
@@ -385,6 +401,52 @@ describe('scheduler', () => {
         vi.runAllTimersAsync(),
       ]);
       expect(attempts).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  describe('DELAY task kind', () => {
+    it('can be scheduled without a task callback', async () => {
+      const scheduler = createScheduler();
+      const promise = scheduler.schedule(TaskKind.DELAY);
+      await vi.runAllTimersAsync();
+      await expect(promise).resolves.toBeUndefined();
+    });
+
+    it('does not retry on error', async () => {
+      const scheduler = createScheduler();
+      let attempts = 0;
+      await Promise.all([
+        expect(
+          scheduler.schedule(TaskKind.DELAY, () => {
+            attempts++;
+            throw new Error('fail');
+          })
+        ).rejects.toThrow('fail'),
+        vi.runAllTimersAsync(),
+      ]);
+      expect(attempts).toBe(1);
+    });
+
+    it('waits 1 second before resolving', async () => {
+      const scheduler = createScheduler();
+      let resolved = false;
+
+      const promise = scheduler.schedule(TaskKind.DELAY).then(() => {
+        resolved = true;
+      });
+      expect(resolved).toBe(false);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(resolved).toBe(false);
+      await vi.advanceTimersByTimeAsync(500);
+      await promise;
+      expect(resolved).toBe(true);
+    });
+
+    it('can be cancelled', async () => {
+      const scheduler = createScheduler();
+      const promise = scheduler.schedule(TaskKind.DELAY);
+      scheduler.cancel();
+      await expect(promise).rejects.toThrow(AbortError);
     });
   });
 });
