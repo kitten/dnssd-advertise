@@ -260,16 +260,9 @@ const checkAnswerConflicts = (
   bindings: NetworkBinding[]
 ): ConflictFlag => {
   let flag = ConflictFlag.NONE;
-  const v4Addresses = new Set(
-    bindings
-      .filter(binding => binding.family === IPType.v4)
-      .map(binding => binding.address)
-  );
-  const v6Addresses = new Set(
-    bindings
-      .filter(binding => binding.family === IPType.v6)
-      .map(binding => binding.address)
-  );
+
+  const v4Addresses = new Set<string>();
+  const v6Addresses = new Set<string>();
   for (const answer of answers) {
     const answerName = answer.name?.toLowerCase();
     if (
@@ -279,20 +272,38 @@ const checkAnswerConflicts = (
         answer.data.target.toLowerCase() !== srv.host)
     ) {
       flag |= ConflictFlag.NAME;
-    } else if (
-      answer.type === RecordType.A &&
-      answerName === srv.host &&
-      !v4Addresses.has(answer.data)
-    ) {
-      flag |= ConflictFlag.HOSTNAME_A;
-    } else if (
-      answer.type === RecordType.AAAA &&
-      answerName === srv.host &&
-      !v6Addresses.has(answer.data.toLowerCase())
-    ) {
-      flag |= ConflictFlag.HOSTNAME_AAAA;
+    } else if (answer.type === RecordType.A && answerName === srv.host) {
+      v4Addresses.add(answer.data.toLowerCase());
+    } else if (answer.type === RecordType.AAAA && answerName === srv.host) {
+      v6Addresses.add(answer.data.toLowerCase());
     }
   }
+
+  // Conflicts for A and AAAA records must be checked by looking at all available records instead
+  if (v4Addresses.size || v6Addresses.size) {
+    let v4AddressCount = 0;
+    let v6AddressCount = 0;
+    for (const binding of bindings) {
+      if (binding.family === IPType.v4) {
+        v4AddressCount++;
+        if (!v4Addresses.has(binding.address)) {
+          flag |= ConflictFlag.HOSTNAME_A;
+          break;
+        }
+      } else if (binding.family === IPType.v6) {
+        v6AddressCount++;
+        if (!v6Addresses.has(binding.address)) {
+          flag |= ConflictFlag.HOSTNAME_AAAA;
+          break;
+        }
+      }
+    }
+    if (v4Addresses.size && v4AddressCount !== v4Addresses.size)
+      flag |= ConflictFlag.HOSTNAME_A;
+    if (v6Addresses.size && v6AddressCount !== v6Addresses.size)
+      flag |= ConflictFlag.HOSTNAME_AAAA;
+  }
+
   return flag;
 };
 
