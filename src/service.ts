@@ -118,7 +118,7 @@ export const createServiceRecord = (input: ServiceInput): ServiceRecord => {
       return set;
     }, Object.create(null)),
     txt,
-    ttl: input.ttl || 250,
+    ttl: input.ttl || 120,
   };
 };
 
