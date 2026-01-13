@@ -290,13 +290,13 @@ const checkAnswerConflicts = (
     for (const binding of bindings) {
       if (binding.family === IPType.v4) {
         v4AddressCount++;
-        if (!v4Addresses.has(binding.address)) {
+        if (v4Addresses.size && !v4Addresses.has(binding.address)) {
           flag |= ConflictFlag.HOSTNAME_A;
           break;
         }
       } else if (binding.family === IPType.v6) {
         v6AddressCount++;
-        if (!v6Addresses.has(binding.address)) {
+        if (v6Addresses.size && !v6Addresses.has(binding.address)) {
           flag |= ConflictFlag.HOSTNAME_AAAA;
           break;
         }

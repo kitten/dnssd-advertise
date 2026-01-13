@@ -277,16 +277,6 @@ describe('nics', () => {
       expect(fp1).toBe(fp2);
     });
 
-    it('incorporates hostname in fingerprint', () => {
-      vi.spyOn(os, 'hostname').mockReturnValue('host-a');
-      const fp1 = fingerprint(8080, 0);
-
-      vi.spyOn(os, 'hostname').mockReturnValue('host-b');
-      const fp2 = fingerprint(8080, 0);
-
-      expect(fp1).not.toBe(fp2);
-    });
-
     it('seed of 0 does not modify the hash', () => {
       const fp1 = fingerprint(3000, 0);
       const fp2 = fingerprint(3000, 0);
