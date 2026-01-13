@@ -218,16 +218,13 @@ export function createInterfaceAdvertiser(
       return;
     }
     await scheduler.schedule(TaskKind.REOPEN, async task => {
-      if (
-        state === AdvertiserState.CLOSED &&
-        socket.refresh() &&
-        !socket.closed
-      ) {
-        return task.retry();
-      } else if (!socket.closed) {
-        state = AdvertiserState.PROBING;
+      if (state !== AdvertiserState.CLOSED) {
         return;
       }
+      if (!socket.refresh() || socket.closed) {
+        return task.retry();
+      }
+      state = AdvertiserState.PROBING;
     });
     return next();
   }
