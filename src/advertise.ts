@@ -207,6 +207,7 @@ export function createInterfaceAdvertiser(
   }
 
   async function reopen() {
+    scheduler.cancel();
     if (loops++ > MAX_SETUPS) {
       return;
     }
