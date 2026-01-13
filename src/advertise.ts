@@ -146,7 +146,7 @@ export function createInterfaceAdvertiser(
     probes = 0;
     conflict = ConflictFlag.NONE;
 
-    let maxAttempts = 4;
+    let maxAttempts = 3;
     await scheduler.schedule(TaskKind.PROBE, async task => {
       const hasLostTiebreaker = conflict & ConflictFlag.LOST_TIEBREAKER;
       if (socket.closed) {
