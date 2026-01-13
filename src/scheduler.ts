@@ -132,7 +132,7 @@ export function createScheduler(): Scheduler {
             if (task) {
               result = await task({
                 attempt,
-                async retry(delay) {
+                retry(delay) {
                   isRetrying = true;
                   return schedule(attempt + 1, delay);
                 },
