@@ -1,4 +1,4 @@
-import { type Packet, decode } from 'dns-message';
+import { type Packet, PacketType, decode } from 'dns-message';
 
 import type { RemoteInfo } from './socket';
 import { AbortError, TaskKind } from './scheduler';
@@ -8,7 +8,7 @@ import {
   TxtValue,
   ConflictFlag,
   checkResponseConflicts,
-  checkConflicts,
+  checkQuestionConflicts,
   responseMessage,
   probeMessage,
   announceMessage,
@@ -77,21 +77,27 @@ export function createInterfaceAdvertiser(
       }
       const packet = decode(msg);
       if (state === AdvertiserState.PROBING) {
-        probes++;
-        conflict |= checkConflicts(packet, srv, socket.bindings);
-        return;
+        if (packet.type === PacketType.QUERY) {
+          probes++;
+          const flag = checkQuestionConflicts(packet, srv, socket.bindings);
+          conflict |=
+            flag !== ConflictFlag.NONE
+              ? flag | ConflictFlag.LOST_TIEBREAKER
+              : ConflictFlag.NONE;
+        } else if (packet.type === PacketType.RESPONSE) {
+          conflict |= checkResponseConflicts(packet, srv, socket.bindings);
+        }
       } else if (state === AdvertiserState.ADVERTISE) {
         conflict = checkResponseConflicts(packet, srv, socket.bindings);
         if (resolveConflicts()) {
           state = AdvertiserState.PROBING;
-          return;
-        }
-
-        try {
-          await sendReply(packet, rinfo);
-        } catch (error) {
-          if (!AbortError.isAbortError(error)) {
-            services.onError(error);
+        } else {
+          try {
+            await sendReply(packet, rinfo);
+          } catch (error) {
+            if (!AbortError.isAbortError(error)) {
+              services.onError(error);
+            }
           }
         }
       }
@@ -140,13 +146,22 @@ export function createInterfaceAdvertiser(
     probes = 0;
     conflict = ConflictFlag.NONE;
 
+    let maxAttempts = 4;
     await scheduler.schedule(TaskKind.PROBE, async task => {
+      const hasLostTiebreaker = conflict & ConflictFlag.LOST_TIEBREAKER;
       if (socket.closed) {
         state = AdvertiserState.CLOSED;
         return;
       } else if (state !== AdvertiserState.PROBING) {
         return;
-      } else if (task.attempt >= 3) {
+      } else if (resolveConflicts()) {
+        if (hasLostTiebreaker) await scheduler.schedule(TaskKind.DELAY);
+        maxAttempts += 4;
+        return task.retry();
+      } else if (task.attempt < maxAttempts) {
+        await sendProbe();
+        return task.retry();
+      } else {
         if (probes) {
           // If we have seen no conflicts we're fine to continue
           state =
@@ -157,11 +172,6 @@ export function createInterfaceAdvertiser(
           // If we haven't seen loopback traffic, the socket isn't active
           state = AdvertiserState.CLOSED;
         }
-        return;
-      } else {
-        resolveConflicts();
-        await sendProbe();
-        return task.retry();
       }
     });
 
