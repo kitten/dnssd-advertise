@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.0.3
+
+### Patch Changes
+
+- Implement tiebreaker loss cases properly and extend probes for expected length
+  Submitted by [@kitten](https://github.com/kitten) (See [#5](https://github.com/kitten/dnssd-advertise/pull/5))
+
 ## 1.0.2
 
 ### Patch Changes
