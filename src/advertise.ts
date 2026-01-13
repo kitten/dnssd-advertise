@@ -77,8 +77,8 @@ export function createInterfaceAdvertiser(
       }
       const packet = decode(msg);
       if (state === AdvertiserState.PROBING) {
+        probes++;
         if (packet.type === PacketType.QUERY) {
-          probes++;
           const flag = checkQuestionConflicts(packet, srv, socket.bindings);
           conflict |=
             flag !== ConflictFlag.NONE
@@ -156,22 +156,16 @@ export function createInterfaceAdvertiser(
         return;
       } else if (resolveConflicts()) {
         maxAttempts += 4;
-        probes = 0;
         return task.retry(hasLostTiebreaker ? 1000 : undefined);
       } else if (task.attempt < maxAttempts) {
         await sendProbe();
         return task.retry();
       } else {
-        if (probes) {
-          // If we have seen no conflicts we're fine to continue
-          state =
-            conflict === ConflictFlag.NONE
-              ? AdvertiserState.ADVERTISE
-              : AdvertiserState.CLOSED;
-        } else {
-          // If we haven't seen loopback traffic, the socket isn't active
-          state = AdvertiserState.CLOSED;
-        }
+        state = probes
+          ? conflict === ConflictFlag.NONE
+            ? AdvertiserState.ADVERTISE
+            : AdvertiserState.CLOSED
+          : (state = AdvertiserState.CLOSED);
       }
     });
 
