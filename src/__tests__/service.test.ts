@@ -15,6 +15,7 @@ import {
   announceMessage,
   goodbyeMessage,
   responseMessage,
+  checkQuestionConflicts,
   checkResponseConflicts,
   ConflictFlag,
 } from '../service';
@@ -509,6 +510,455 @@ describe('service', () => {
         checkResponseConflicts(packet, record, bindings) &
           ConflictFlag.HOSTNAME_A
       ).toBeTruthy();
+    });
+  });
+
+  describe('checkQuestionConflicts', () => {
+    it('returns NONE for non-query packets', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.RESPONSE,
+        questions: [],
+        authorities: [],
+      } as Packet;
+
+      expect(checkQuestionConflicts(packet, record, bindings)).toBe(
+        ConflictFlag.NONE
+      );
+    });
+
+    it('returns NONE when packet has no questions', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [],
+        authorities: [
+          {
+            type: RecordType.SRV,
+            name: record.fqdnIn,
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: {
+              priority: 0,
+              weight: 0,
+              port: 9090,
+              target: 'otherhost.local',
+            },
+          },
+        ],
+      } as Packet;
+
+      expect(checkQuestionConflicts(packet, record, bindings)).toBe(
+        ConflictFlag.NONE
+      );
+    });
+
+    it('returns NONE when packet has no authorities', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: record.fqdnIn,
+            type: RecordType.ANY,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [],
+      } as Packet;
+
+      expect(checkQuestionConflicts(packet, record, bindings)).toBe(
+        ConflictFlag.NONE
+      );
+    });
+
+    it('returns NONE when no questions match our records', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: 'unrelated._http._tcp.local',
+            type: RecordType.ANY,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [
+          {
+            type: RecordType.SRV,
+            name: record.fqdnIn,
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: {
+              priority: 0,
+              weight: 0,
+              port: 9090,
+              target: 'otherhost.local',
+            },
+          },
+        ],
+      } as Packet;
+
+      expect(checkQuestionConflicts(packet, record, bindings)).toBe(
+        ConflictFlag.NONE
+      );
+    });
+
+    it('returns NONE when we win the tiebreaker (our authorities sort higher)', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: record.host,
+            type: RecordType.ANY,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [
+          {
+            type: RecordType.A,
+            name: record.host,
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: '10.0.0.1',
+          },
+        ],
+      } as Packet;
+
+      expect(checkQuestionConflicts(packet, record, bindings)).toBe(
+        ConflictFlag.NONE
+      );
+    });
+
+    it('returns conflict flag when we lose the tiebreaker (their authorities sort higher)', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: record.host,
+            type: RecordType.ANY,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [
+          {
+            type: RecordType.A,
+            name: record.host,
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: '250.0.0.1',
+          },
+        ],
+      } as Packet;
+
+      const result = checkQuestionConflicts(packet, record, bindings);
+      expect(result & ConflictFlag.HOSTNAME_A).toBeTruthy();
+    });
+
+    it('detects NAME conflict when losing tiebreaker with conflicting SRV', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: record.fqdnIn,
+            type: RecordType.ANY,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [
+          {
+            type: RecordType.SRV,
+            name: record.fqdnIn,
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: {
+              priority: 0,
+              weight: 0,
+              port: 9999,
+              target: 'zzz-wins.local',
+            },
+          },
+        ],
+      } as Packet;
+
+      const result = checkQuestionConflicts(packet, record, bindings);
+      expect(result & ConflictFlag.NAME).toBeTruthy();
+    });
+
+    it('matches questions against hostname', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: 'testhost.local',
+            type: RecordType.A,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [
+          {
+            type: RecordType.A,
+            name: 'testhost.local',
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: '255.255.255.255',
+          },
+        ],
+      } as Packet;
+
+      const result = checkQuestionConflicts(packet, record, bindings);
+      expect(result & ConflictFlag.HOSTNAME_A).toBeTruthy();
+    });
+
+    it('matches questions against service FQDN', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: record.fqdnIn,
+            type: RecordType.SRV,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [
+          {
+            type: RecordType.SRV,
+            name: record.fqdnIn,
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: {
+              priority: 0,
+              weight: 0,
+              port: 9999,
+              target: 'zzz.local',
+            },
+          },
+        ],
+      } as Packet;
+
+      const result = checkQuestionConflicts(packet, record, bindings);
+      expect(result & ConflictFlag.NAME).toBeTruthy();
+    });
+
+    it('only considers authorities matching our records for tiebreaking', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'testhost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: record.fqdnIn,
+            type: RecordType.ANY,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [
+          {
+            type: RecordType.A,
+            name: 'unrelated.local',
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: '255.255.255.255',
+          },
+          {
+            type: RecordType.SRV,
+            name: record.fqdnIn,
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: {
+              priority: 0,
+              weight: 0,
+              port: 8080,
+              target: record.host,
+            },
+          },
+        ],
+      } as Packet;
+
+      expect(checkQuestionConflicts(packet, record, bindings)).toBe(
+        ConflictFlag.NONE
+      );
+    });
+
+    it('handles case-insensitive name matching', () => {
+      const input = createServiceInput({
+        name: 'Test',
+        type: 'http',
+        protocol: 'tcp',
+        hostname: 'TestHost',
+        port: 8080,
+        subtypes: [],
+        txt: {},
+        ttl: 250,
+      });
+      const record = createServiceRecord(input);
+      const bindings = createTestBindings();
+
+      const packet = {
+        type: PacketType.QUERY,
+        questions: [
+          {
+            name: 'TESTHOST.LOCAL',
+            type: RecordType.A,
+            class: RecordClass.IN,
+            qu: true,
+          },
+        ],
+        authorities: [
+          {
+            type: RecordType.A,
+            name: 'testhost.local',
+            class: RecordClass.IN,
+            ttl: 120,
+            flush: true,
+            data: '255.255.255.255',
+          },
+        ],
+      } as Packet;
+
+      const result = checkQuestionConflicts(packet, record, bindings);
+      expect(result & ConflictFlag.HOSTNAME_A).toBeTruthy();
     });
   });
 
