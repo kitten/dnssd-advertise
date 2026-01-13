@@ -120,7 +120,7 @@ export class AbortError extends Error {
 export function createScheduler(): Scheduler {
   const cancelFns = new Set<() => void>();
   async function schedule<T>(kind: TaskKind, task?: Task<T>): Promise<T> {
-    async function schedule(attempt: number, delay) {
+    async function schedule(attempt: number, delay?: number) {
       if (!delay) delay = getDelay(kind, attempt);
       return new Promise<T>(async (resolve, reject) => {
         const delayMin = Math.max(delay, SCHEDULER_MIN);
