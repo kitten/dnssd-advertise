@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.0.2
+
+### Patch Changes
+
+- Compare all A/AAAA addresses when checking for conflicts
+  Submitted by [@kitten](https://github.com/kitten) (See [#3](https://github.com/kitten/dnssd-advertise/pull/3))
+
 ## 1.0.1
 
 ### Patch Changes
