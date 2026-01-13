@@ -1,6 +1,6 @@
 {
   "name": "dnssd-advertise",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A Bonjour DNS-SD service announcer via mDNS on UDP",
   "author": "Phil Pluckthun <phil@kitten.sh>",
   "source": "./src/index.ts",
