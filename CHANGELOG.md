@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.0.6
+
+### Patch Changes
+
+- Apply loops limit of 15 to probing
+  Submitted by [@kitten](https://github.com/kitten) (See [#11](https://github.com/kitten/dnssd-advertise/pull/11))
+
 ## 1.0.5
 
 ### Patch Changes
