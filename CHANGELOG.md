@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.0.4
+
+### Patch Changes
+
+- Tweak default behaviour and constants
+  Submitted by [@kitten](https://github.com/kitten) (See [#7](https://github.com/kitten/dnssd-advertise/pull/7))
+
 ## 1.0.3
 
 ### Patch Changes
