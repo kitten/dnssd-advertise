@@ -54,7 +54,8 @@ export const hasScopeid = (
   return bind.scopeid != null && bind.scopeid > 0;
 };
 
-export const hostname = () => os.hostname();
+let _hostname: string | undefined;
+export const hostname = () => _hostname || (_hostname = os.hostname());
 
 export const fingerprint = (port: number, seed: number) => {
   const value = `${hostname()}:${port}`;
