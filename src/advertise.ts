@@ -143,6 +143,7 @@ export function createInterfaceAdvertiser(
   }
 
   async function probe() {
+    loops = 0;
     probes = 0;
     conflict = ConflictFlag.NONE;
 
@@ -156,7 +157,11 @@ export function createInterfaceAdvertiser(
         return;
       } else if (resolveConflicts()) {
         maxAttempts += 4;
-        return task.retry(hasLostTiebreaker ? 1000 : undefined);
+        if (++loops < MAX_SETUPS) {
+          return task.retry(hasLostTiebreaker ? 1000 : undefined);
+        } else {
+          state = AdvertiserState.CLOSED;
+        }
       } else if (task.attempt < maxAttempts) {
         await sendProbe();
         return task.retry();
@@ -208,18 +213,18 @@ export function createInterfaceAdvertiser(
 
   async function reopen() {
     scheduler.cancel();
-    if (loops++ > MAX_SETUPS) {
-      return;
+    while (state === AdvertiserState.CLOSED && loops < MAX_SETUPS) {
+      loops++;
+      await scheduler.schedule(TaskKind.REOPEN, async task => {
+        if (state !== AdvertiserState.CLOSED) {
+          return;
+        }
+        if (!socket.refresh() || socket.closed) {
+          return task.retry();
+        }
+        state = AdvertiserState.PROBING;
+      });
     }
-    await scheduler.schedule(TaskKind.REOPEN, async task => {
-      if (state !== AdvertiserState.CLOSED) {
-        return;
-      }
-      if (!socket.refresh() || socket.closed) {
-        return task.retry();
-      }
-      state = AdvertiserState.PROBING;
-    });
     return next();
   }
 
