@@ -67,7 +67,7 @@
     "@rollup/plugin-terser": "^0.4.4",
     "@types/node": "^25.0.3",
     "@vitest/coverage-v8": "^4.0.16",
-    "dns-message": "^1.0.3",
+    "dns-message": "^1.0.4",
     "dotenv": "^17.2.3",
     "lint-staged": "^16.2.6",
     "npm-run-all": "^4.1.5",
