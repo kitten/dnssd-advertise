@@ -345,6 +345,8 @@ export const checkResponseConflicts = (
 };
 
 const compareAuthorities = (a: Answer[], b: Answer[]): number => {
+  a.sort(compareAnswers);
+  b.sort(compareAnswers);
   const length = a.length < b.length ? a.length : b.length;
   for (let idx = 0; idx < length; idx++) {
     const comparison = compareAnswers(a[idx], b[idx]);
@@ -378,13 +380,12 @@ export const checkQuestionConflicts = (
     return ConflictFlag.NONE;
   }
   const ourAuthorities = authorities(srv, bindings, srv.ttl);
-  const theirAuthorities = packet.authorities
-    .filter(
-      answer =>
-        answer.name?.toLowerCase() === srv.host ||
-        answer.name?.toLowerCase() === srv.fqdnIn
-    )
-    .sort(compareAnswers);
+  const theirAuthorities = packet.authorities.filter(answer => {
+    return (
+      answer.name?.toLowerCase() === srv.host ||
+      answer.name?.toLowerCase() === srv.fqdnIn
+    );
+  });
   const comparison = compareAuthorities(ourAuthorities, theirAuthorities);
   if (comparison < 0) {
     return checkAnswerConflicts(packet.authorities, srv, bindings);
