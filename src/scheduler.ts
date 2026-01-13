@@ -5,7 +5,6 @@ export const enum TaskKind {
   PROBE,
   ANNOUNCE,
   REOPEN,
-  DELAY,
 }
 
 interface Timer {
@@ -29,8 +28,6 @@ const shouldRetry = (kind: TaskKind, attempt: number): boolean => {
       return attempt < 3;
     case TaskKind.REOPEN:
       return true;
-    case TaskKind.DELAY:
-      return false;
   }
 };
 
@@ -44,8 +41,6 @@ const getDelay = (kind: TaskKind, attempt: number): number => {
       return attempt ? 1000 * 2 ** (Math.min(attempt, 3) - 1) : 0;
     case TaskKind.REOPEN:
       return 6000;
-    case TaskKind.DELAY:
-      return 1000;
   }
 };
 
@@ -125,7 +120,8 @@ export class AbortError extends Error {
 export function createScheduler(): Scheduler {
   const cancelFns = new Set<() => void>();
   async function schedule<T>(kind: TaskKind, task?: Task<T>): Promise<T> {
-    async function schedule(attempt: number, delay = getDelay(kind, attempt)) {
+    async function schedule(attempt: number, delay) {
+      if (!delay) delay = getDelay(kind, attempt);
       return new Promise<T>(async (resolve, reject) => {
         const delayMin = Math.max(delay, SCHEDULER_MIN);
         const cancelTimer = runTimer(kind, delayMin, async () => {

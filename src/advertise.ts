@@ -155,9 +155,9 @@ export function createInterfaceAdvertiser(
       } else if (state !== AdvertiserState.PROBING) {
         return;
       } else if (resolveConflicts()) {
-        if (hasLostTiebreaker) await scheduler.schedule(TaskKind.DELAY);
         maxAttempts += 4;
-        return task.retry();
+        probes = 0;
+        return task.retry(hasLostTiebreaker ? 1000 : undefined);
       } else if (task.attempt < maxAttempts) {
         await sendProbe();
         return task.retry();

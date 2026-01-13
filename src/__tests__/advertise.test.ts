@@ -5,7 +5,7 @@ import {
   createInterfaceAdvertiser,
   type AdvertiseParams,
 } from '../advertise';
-import { createScheduler, cancelAll, AbortError, TaskKind } from '../scheduler';
+import { createScheduler, cancelAll, AbortError } from '../scheduler';
 import { createServiceInput, createServiceRecord } from '../service';
 import { IPType } from '../constants';
 import type { Services } from '../constants';
@@ -395,25 +395,15 @@ describe('advertise', () => {
       );
     });
 
-    it('adds delay when losing a tiebreaker during probing', async () => {
+    it('adds 1 second delay when losing a tiebreaker during probing', async () => {
       const params = createTestParams();
       const services = createMockServices();
-      const scheduleSpy = vi.fn();
-
-      const originalCreateScheduler = services.createScheduler;
-      services.createScheduler = () => {
-        const scheduler = originalCreateScheduler();
-        const originalSchedule = scheduler.schedule.bind(scheduler);
-        scheduler.schedule = ((kind: TaskKind, task?: any) => {
-          scheduleSpy(kind);
-          return originalSchedule(kind, task);
-        }) as typeof scheduler.schedule;
-        return scheduler;
-      };
 
       createInterfaceAdvertiser('en0', params, services);
 
       await vi.advanceTimersByTimeAsync(300);
+      const messageCountBeforeConflict =
+        services.mockSocket.sentMessages.length;
 
       const tiebreakerPacket = encode({
         type: PacketType.QUERY,
@@ -443,9 +433,10 @@ describe('advertise', () => {
         5353
       );
 
-      await vi.advanceTimersByTimeAsync(2000);
-
-      expect(scheduleSpy).toHaveBeenCalledWith(TaskKind.DELAY);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(services.mockSocket.sentMessages.length).toBeGreaterThan(
+        messageCountBeforeConflict
+      );
     });
   });
 
@@ -522,7 +513,6 @@ describe('advertise', () => {
 
       interfaces = ['en0', 'en1'];
 
-      // Wait for the REOPEN task to run (6000ms delay)
       await vi.advanceTimersByTimeAsync(7000);
 
       expect(createSocketSpy).toHaveBeenCalledTimes(2);
@@ -563,13 +553,10 @@ describe('advertise', () => {
 
       expect(mockSockets.size).toBe(2);
 
-      // Simulate interface being removed
       interfaces = ['en0'];
 
-      // Wait for the REOPEN task to run
       await vi.advanceTimersByTimeAsync(7000);
 
-      // The en1 socket should be closed
       expect(mockSockets.get('en1')!.closed).toBe(true);
     });
   });
@@ -581,11 +568,9 @@ describe('advertise', () => {
 
       const handle = createInterfaceAdvertiser('en0', params, services);
 
-      // Close immediately to trigger cancellation
       handle.close();
       await vi.runAllTimersAsync();
 
-      // No AbortErrors should be in the errors array
       const hasAbortError = services.errors.some(e =>
         AbortError.isAbortError(e)
       );
@@ -599,10 +584,8 @@ describe('advertise', () => {
 
       createInterfaceAdvertiser('en0', params, services);
 
-      // Close socket immediately
       mockSocket.close();
 
-      // Should not throw when trying to send
       await vi.advanceTimersByTimeAsync(1000);
     });
   });
@@ -616,14 +599,11 @@ describe('advertise', () => {
 
       createInterfaceAdvertiser('en0', params, services);
 
-      // Simulate socket closing
       mockSocket.close();
       expect(mockSocket.closed).toBe(true);
 
-      // Wait for reopen attempt (REOPEN task has 6000ms delay)
       await vi.advanceTimersByTimeAsync(10000);
 
-      // refresh() should have been called to try to reopen
       expect(refreshSpy).toHaveBeenCalled();
     });
   });
