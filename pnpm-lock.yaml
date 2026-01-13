@@ -36,8 +36,8 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(vitest@4.0.16(@types/node@25.0.3)(terser@5.44.1)(yaml@2.8.2))
       dns-message:
-        specifier: ^1.0.3
-        version: 1.0.3
+        specifier: ^1.0.4
+        version: 1.0.4
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -897,8 +897,8 @@ packages:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
 
-  dns-message@1.0.3:
-    resolution: {integrity: sha512-8eutEX+Ju/mmZ9r11x/BWnNUVSH0qxm5CCjo/tY/NZyZNihvjP9Pq2jWBXOP7vKGfz0tvT4wWKlYBsrRz+S9Ww==}
+  dns-message@1.0.4:
+    resolution: {integrity: sha512-yO0a3WWK0nXMEVqGONeLmextGpWWip2v0cUdUN6Ra1CnfveiZVCxNnU7bBSgovK8euprmdrejFv/jUodfQobtw==}
 
   dotenv@17.2.3:
     resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
@@ -2870,7 +2870,7 @@ snapshots:
     dependencies:
       path-type: 4.0.0
 
-  dns-message@1.0.3: {}
+  dns-message@1.0.4: {}
 
   dotenv@17.2.3: {}
 

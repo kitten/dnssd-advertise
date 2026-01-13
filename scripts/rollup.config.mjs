@@ -93,7 +93,7 @@ const commonOutput = {
   dir: './',
   exports: 'auto',
   sourcemap: true,
-  sourcemapExcludeSources: false,
+  sourcemapExcludeSources: true,
   hoistTransitiveImports: false,
   indent: false,
   freeze: false,
