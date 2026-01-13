@@ -393,16 +393,6 @@ export const checkQuestionConflicts = (
   }
 };
 
-export const checkConflicts = (
-  packet: Packet,
-  srv: ServiceRecord,
-  bindings: NetworkBinding[]
-): ConflictFlag => {
-  return packet.type === PacketType.RESPONSE
-    ? checkResponseConflicts(packet, srv, bindings)
-    : checkQuestionConflicts(packet, srv, bindings);
-};
-
 export const responseMessage = (
   packet: Packet,
   srv: ServiceRecord,
