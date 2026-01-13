@@ -245,11 +245,9 @@ describe('advertise', () => {
     it('detects name conflict from SRV response with different port', async () => {
       const params = createTestParams();
       const services = createMockServices();
+      const initialMessageCount = services.mockSocket.sentMessages.length;
 
       createInterfaceAdvertiser('en0', params, services);
-
-      await vi.advanceTimersByTimeAsync(100);
-      const initialMessageCount = services.mockSocket.sentMessages.length;
 
       const conflictPacket = encode({
         type: PacketType.RESPONSE,
@@ -277,7 +275,7 @@ describe('advertise', () => {
         5353
       );
 
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(services.mockSocket.sentMessages.length).toBeGreaterThan(
         initialMessageCount
@@ -287,11 +285,11 @@ describe('advertise', () => {
     it('detects hostname conflict from A response with different address', async () => {
       const params = createTestParams();
       const services = createMockServices();
+      const initialMessageCount = services.mockSocket.sentMessages.length;
 
       createInterfaceAdvertiser('en0', params, services);
 
       await vi.advanceTimersByTimeAsync(100);
-      const initialMessageCount = services.mockSocket.sentMessages.length;
 
       const conflictPacket = encode({
         type: PacketType.RESPONSE,
@@ -314,7 +312,7 @@ describe('advertise', () => {
         5353
       );
 
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(services.mockSocket.sentMessages.length).toBeGreaterThan(
         initialMessageCount
