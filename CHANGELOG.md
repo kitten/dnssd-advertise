@@ -1,5 +1,14 @@
 # dns-message
 
+## 1.0.5
+
+### Patch Changes
+
+- ⚠️ Fix goodbye message being cancelled by scheduler cancellation
+  Submitted by [@kitten](https://github.com/kitten) (See [#9](https://github.com/kitten/dnssd-advertise/pull/9))
+- ⚠️ Fix uncaught errors in main advertiser
+  Submitted by [@kitten](https://github.com/kitten) (See [#9](https://github.com/kitten/dnssd-advertise/pull/9))
+
 ## 1.0.4
 
 ### Patch Changes
