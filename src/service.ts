@@ -14,7 +14,7 @@ import {
   encode,
 } from 'dns-message';
 
-import { fingerprint, NetworkBinding } from './nics';
+import { hostname, fingerprint, NetworkBinding } from './nics';
 import { IPType, DNSSD_NAME, LABEL_LENGTH } from './constants';
 import type { AdvertiseParams } from './advertise';
 
@@ -36,10 +36,13 @@ export interface ServiceRecord {
   ttl: number;
 }
 
+let hadOSHostnameConflict = false;
+
 export const createServiceInput = (options: AdvertiseParams): ServiceInput => ({
   ...options,
   nameSeed: 0,
-  hostnameSeed: 0,
+  hostnameSeed:
+    hadOSHostnameConflict && options.hostname === hostname() ? 1 : 0,
 });
 
 const sanitizeSubtype = (subtype: string): string =>
@@ -64,6 +67,7 @@ const sanitizeName = (name: string): string =>
 const createServiceHost = (input: string, seed: number) => {
   let host = sanitizeLabel(input);
   if (seed) {
+    hadOSHostnameConflict ||= input === hostname();
     const match = /[-_](\d+)$/.exec(host);
     if (match) {
       const prefix = host.slice(0, -match[0].length);
