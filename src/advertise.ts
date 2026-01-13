@@ -279,34 +279,46 @@ export function advertiseInternal(
     handles.set(iname, createInterfaceAdvertiser(iname, params, services));
   }
 
-  scheduler.schedule(TaskKind.REOPEN, task => {
-    try {
-      const inames = new Set(services.networkInterfaceNames());
-      for (const iname of inames) {
-        if (!handles.has(iname)) {
-          handles.set(
-            iname,
-            createInterfaceAdvertiser(iname, params, services)
-          );
+  scheduler
+    .schedule(TaskKind.REOPEN, task => {
+      try {
+        const inames = new Set(services.networkInterfaceNames());
+        for (const iname of inames) {
+          if (!handles.has(iname)) {
+            handles.set(
+              iname,
+              createInterfaceAdvertiser(iname, params, services)
+            );
+          }
         }
-      }
-      for (const [iname, handle] of handles) {
-        if (!inames.has(iname)) {
-          handles.delete(iname);
-          handle.close();
+        for (const [iname, handle] of handles) {
+          if (!inames.has(iname)) {
+            handles.delete(iname);
+            handle.close();
+          }
+        }
+      } catch (error) {
+        if (!AbortError.isAbortError(error)) {
+          services.onError(error);
         }
       }
       return task.retry();
+    })
+    .catch(error => {
+      if (!AbortError.isAbortError(error)) {
+        services.onError(error);
+      }
+    });
+
+  return async () => {
+    scheduler.cancel();
+    try {
+      await Promise.all([...handles.values()].map(handle => handle.close()));
     } catch (error) {
       if (!AbortError.isAbortError(error)) {
         services.onError(error);
       }
     }
-  });
-
-  return async () => {
-    scheduler.cancel();
-    await Promise.all([...handles.values()].map(handle => handle.close()));
   };
 }
 
