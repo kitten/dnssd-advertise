@@ -6,7 +6,6 @@ import {
   type NetworkBinding,
   interfaceBindings,
   hasScopeid,
-  parseIPv4,
   getIPv4PrefixFromNetmask,
   getIPv6PrefixFromNetmask,
 } from './nics';
@@ -75,16 +74,6 @@ const createSocketSettings = (
       return null;
     }
     memberships.add((multicastInterface = `::%${interfaceId}`));
-  }
-  let blocklist: BlockList | undefined;
-  if (process.platform === 'linux') {
-    blocklist = new BlockList();
-    if (family === IPType.v4) {
-      for (const binding of bindings) {
-        const prefix = getIPv4PrefixFromNetmask(binding.netmask);
-        blocklist.addSubnet(binding.address, prefix, 'ipv4');
-      }
-    }
   }
   return {
     family,
