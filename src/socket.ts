@@ -168,12 +168,12 @@ const createInterfaceSocket = (
     );
     dgramSocket.unref();
     dgramSocket.on('message', async (message, rinfo) => {
-      let zoneIdx: number;
+      let zoneIdx = -1;
       if (family === IPType.v6 && (zoneIdx = rinfo.address.indexOf('%')) > -1) {
         // ignore messages intended for different interface
         const zone = rinfo.address.slice(zoneIdx + 1);
         if (zone !== iname) return;
-      } else if (!filter?.check(rinfo.address)) {
+      } else if (zoneIdx === -1 && !filter?.check(rinfo.address)) {
         // ignore messages intended for different subnet
         return;
       }
