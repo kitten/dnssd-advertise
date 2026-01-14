@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.0.8
+
+### Patch Changes
+
+- Filter incoming messages by remote address manually to check for IPv6 zone match or subnet address on Linux. `SO_BINDTODEVICE` isn't accessible to us for Linux, which means that we have to manually filter incoming messages per socket
+  Submitted by [@kitten](https://github.com/kitten) (See [#15](https://github.com/kitten/dnssd-advertise/pull/15))
+
 ## 1.0.7
 
 ### Patch Changes
