@@ -173,8 +173,12 @@ const createInterfaceSocket = (
         // ignore messages intended for different interface
         const zone = rinfo.address.slice(zoneIdx + 1);
         if (zone !== iname) return;
-      } else if (zoneIdx === -1 && !filter?.check(rinfo.address)) {
-        // ignore messages intended for different subnet
+      } else if (
+        zoneIdx === -1 &&
+        filter != null &&
+        !filter.check(rinfo.address)
+      ) {
+        // ignore messages intended for different subnet (Linux-only)
         return;
       }
 
