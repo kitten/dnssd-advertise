@@ -342,7 +342,7 @@ export function advertise(options: AdvertiseOptions): () => Promise<void> {
       port: options.port,
       subtypes: options.subtypes || [],
       txt: options.txt || {},
-      ttl: options.ttl || 250,
+      ttl: options.ttl || 120,
     },
     defaultServices
   );
