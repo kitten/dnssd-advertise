@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.0.7
+
+### Patch Changes
+
+- Set default TTL to 120s
+  Submitted by [@kitten](https://github.com/kitten) (See [#13](https://github.com/kitten/dnssd-advertise/pull/13))
+
 ## 1.0.6
 
 ### Patch Changes
