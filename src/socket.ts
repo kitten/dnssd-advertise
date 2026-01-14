@@ -1,7 +1,14 @@
 import dgram from 'node:dgram';
+import { BlockList } from 'node:net';
 
 import { IPType, MDNSAddress, MDNS_PORT } from './constants';
-import { type NetworkBinding, interfaceBindings, hasScopeid } from './nics';
+import {
+  type NetworkBinding,
+  interfaceBindings,
+  hasScopeid,
+  getIPv4PrefixFromNetmask,
+  getIPv6PrefixFromNetmask,
+} from './nics';
 
 interface QueuedMessage {
   onSent(error: Error | null): void;
@@ -118,6 +125,33 @@ const createInterfaceSocket = (
     if (!settings) {
       return null;
     }
+
+    // Node.js does not give us access to SO_BINDTODEVICE for Linux
+    // However, Linux does not filter multicast UDP packets by membership
+    // This means that our socket can receive messages for other interfaces
+    // Blocking packets by address breaks mDNS over NAT, but we don't have a better alternative
+    let filter: ((address: string) => boolean) | undefined;
+    if (process.platform === 'linux') {
+      const list = new BlockList();
+      for (const binding of settings.bindings) {
+        if (binding.family === IPType.v4) {
+          list.addSubnet(
+            binding.address,
+            getIPv4PrefixFromNetmask(binding.netmask),
+            'ipv4'
+          );
+        } else {
+          list.addSubnet(
+            binding.address,
+            getIPv6PrefixFromNetmask(binding.netmask),
+            'ipv6'
+          );
+        }
+      }
+      const type = family === IPType.v4 ? 'ipv4' : 'ipv6';
+      filter = address => list.check(address, type);
+    }
+
     const dgramSocket = dgram.createSocket(
       family === IPType.v4
         ? { type: 'udp4', reuseAddr: true }
@@ -125,6 +159,16 @@ const createInterfaceSocket = (
     );
     dgramSocket.unref();
     dgramSocket.on('message', async (message, rinfo) => {
+      let zoneIdx = -1;
+      if (family === IPType.v6 && (zoneIdx = rinfo.address.indexOf('%')) > -1) {
+        // ignore messages intended for different interface
+        const zone = rinfo.address.slice(zoneIdx + 1);
+        if (zone !== iname) return;
+      } else if (zoneIdx === -1 && filter && !filter(rinfo.address)) {
+        // ignore messages intended for different subnet (Linux-only)
+        return;
+      }
+
       try {
         await params.onMessage(message, {
           socket,
@@ -139,6 +183,7 @@ const createInterfaceSocket = (
         // ignore errors here onMessage calls
       }
     });
+
     scheduleTimer(
       new Promise<void>((resolve, reject) => {
         dgramSocket.prependOnceListener('error', reject);
@@ -157,6 +202,7 @@ const createInterfaceSocket = (
         });
       })
     );
+
     return { settings, socket: dgramSocket };
   }
 
