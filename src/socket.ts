@@ -130,24 +130,26 @@ const createInterfaceSocket = (
     // However, Linux does not filter multicast UDP packets by membership
     // This means that our socket can receive messages for other interfaces
     // Blocking packets by address breaks mDNS over NAT, but we don't have a better alternative
-    let filter: BlockList | undefined;
+    let filter: ((address: string) => boolean) | undefined;
     if (process.platform === 'linux') {
-      filter = new BlockList();
+      const list = new BlockList();
       for (const binding of settings.bindings) {
         if (binding.family === IPType.v4) {
-          filter.addSubnet(
+          list.addSubnet(
             binding.address,
             getIPv4PrefixFromNetmask(binding.netmask),
             'ipv4'
           );
         } else {
-          filter.addSubnet(
+          list.addSubnet(
             binding.address,
             getIPv6PrefixFromNetmask(binding.netmask),
             'ipv6'
           );
         }
       }
+      const type = family === IPType.v4 ? 'ipv4' : 'ipv6';
+      filter = address => list.check(address, type);
     }
 
     const dgramSocket = dgram.createSocket(
@@ -162,11 +164,7 @@ const createInterfaceSocket = (
         // ignore messages intended for different interface
         const zone = rinfo.address.slice(zoneIdx + 1);
         if (zone !== iname) return;
-      } else if (
-        zoneIdx === -1 &&
-        filter != null &&
-        !filter.check(rinfo.address)
-      ) {
+      } else if (zoneIdx === -1 && filter && !filter(rinfo.address)) {
         // ignore messages intended for different subnet (Linux-only)
         return;
       }
