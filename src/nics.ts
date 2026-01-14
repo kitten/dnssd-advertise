@@ -66,7 +66,7 @@ export const fingerprint = (port: number, seed: number) => {
   return (hash & 0xffff).toString(16).toUpperCase().padStart(4, '0');
 };
 
-const hammingWeight = x => {
+const hammingWeight = (x: number): number => {
   x = x - ((x >> 1) & 0x55555555);
   x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
   x = (x + (x >> 4)) & 0x0f0f0f0f;
