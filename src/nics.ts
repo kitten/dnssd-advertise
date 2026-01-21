@@ -42,9 +42,20 @@ export const interfaceBindings = (
   iname: string,
   family: IPType
 ): NetworkBinding[] | undefined => {
-  const bindings = networkInterfaces()
+  let bindings = networkInterfaces()
     [iname]?.filter(binding => binding.family === family)
     .map(binding => ({ ...binding, family, iname }));
+  if (bindings && family === IPType.v6) {
+    bindings?.sort((a, b) => {
+      if (a.address.startsWith('fe80:')) {
+        return 1;
+      } else if (b.address.startsWith('fe80:')) {
+        return -1;
+      } else {
+        return a.address < b.address ? -1 : 1;
+      }
+    });
+  }
   return bindings?.length ? bindings : undefined;
 };
 
