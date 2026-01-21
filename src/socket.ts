@@ -35,6 +35,7 @@ export interface RemoteInfo {
 
 export interface SocketParams {
   onMessage(msg: Buffer, rinfo: RemoteInfo): Promise<void> | void;
+  stack: 'IPv4' | 'IPv6' | null;
 }
 
 export interface Socket {
@@ -357,26 +358,39 @@ const createInterfaceSocket = (
 };
 
 export const createSocket = (iname: string, params: SocketParams): Socket => {
-  const ipv4 = createInterfaceSocket(iname, IPType.v4, params);
-  const ipv6 = createInterfaceSocket(iname, IPType.v6, params);
+  let singleSocket: Socket;
+  let dualSocket: Socket | null = null;
+  if (params.stack === 'IPv4') {
+    singleSocket = createInterfaceSocket(iname, IPType.v4, params);
+  } else if (params.stack === 'IPv6') {
+    singleSocket = createInterfaceSocket(iname, IPType.v6, params);
+  } else {
+    singleSocket = createInterfaceSocket(iname, IPType.v4, params);
+    dualSocket = createInterfaceSocket(iname, IPType.v6, params);
+  }
   return {
     get closed() {
-      return ipv4.closed && ipv6.closed;
+      return singleSocket.closed && (!dualSocket || dualSocket.closed);
     },
     get bindings() {
-      return [...ipv4.bindings, ...ipv6.bindings];
+      return dualSocket
+        ? [...singleSocket.bindings, ...dualSocket.bindings]
+        : singleSocket.bindings;
     },
     async send(message: Uint8Array) {
-      await Promise.all([ipv4.send(message), ipv6.send(message)]);
+      await Promise.all([
+        singleSocket.send(message),
+        dualSocket?.send(message),
+      ]);
     },
     refresh() {
-      const hasIPv4Changed = ipv4.refresh();
-      const hasIPv6Changed = ipv6.refresh();
+      const hasIPv4Changed = !!singleSocket.refresh();
+      const hasIPv6Changed = !!dualSocket?.refresh();
       return hasIPv4Changed || hasIPv6Changed;
     },
     close() {
-      ipv4.close();
-      ipv6.close();
+      singleSocket.close();
+      dualSocket?.close();
     },
   };
 };

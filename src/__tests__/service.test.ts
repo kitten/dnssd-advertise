@@ -56,6 +56,7 @@ describe('service', () => {
         subtypes: ['printer'],
         txt: { key: 'value' },
         ttl: 120,
+        stack: null,
       });
 
       expect(input.nameSeed).toBe(0);
@@ -81,6 +82,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
 
@@ -103,6 +105,7 @@ describe('service', () => {
         port: 80,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
 
@@ -119,6 +122,7 @@ describe('service', () => {
         port: 80,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
 
@@ -135,6 +139,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
 
@@ -155,6 +160,7 @@ describe('service', () => {
         port: 80,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
 
@@ -173,6 +179,7 @@ describe('service', () => {
         port: 80,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
 
@@ -198,6 +205,7 @@ describe('service', () => {
           nullKey: null,
           undefinedKey: undefined,
         },
+        stack: null,
         ttl: 250,
       });
 
@@ -220,6 +228,7 @@ describe('service', () => {
         port: 80,
         subtypes: ['printer', 'scanner'],
         txt: {},
+        stack: null,
         ttl: 250,
       });
 
@@ -238,6 +247,7 @@ describe('service', () => {
         port: 80,
         subtypes: ['  My Printer!  '],
         txt: {},
+        stack: null,
         ttl: 250,
       });
 
@@ -258,6 +268,7 @@ describe('service', () => {
         port: 80,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
 
@@ -277,6 +288,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -302,6 +314,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -327,6 +340,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -348,6 +362,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -373,6 +388,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -397,6 +413,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 120,
       });
       const record = createServiceRecord(input);
@@ -423,6 +440,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -449,6 +467,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -487,6 +506,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -523,6 +543,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -548,6 +569,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -587,6 +609,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -619,6 +642,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -665,6 +689,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -706,6 +731,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -746,6 +772,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -791,6 +818,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -831,6 +859,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -876,6 +905,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -930,6 +960,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -972,6 +1003,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -994,6 +1026,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -1023,6 +1056,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -1056,6 +1090,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -1091,6 +1126,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -1126,6 +1162,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -1161,6 +1198,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -1199,6 +1237,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -1235,6 +1274,7 @@ describe('service', () => {
         port: 8080,
         subtypes: ['printer'],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);
@@ -1270,6 +1310,7 @@ describe('service', () => {
         port: 8080,
         subtypes: [],
         txt: {},
+        stack: null,
         ttl: 250,
       });
       const record = createServiceRecord(input);

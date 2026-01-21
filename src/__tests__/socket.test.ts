@@ -97,6 +97,7 @@ describe('socket', () => {
   describe('createSocket', () => {
     it('creates dual-stack sockets for IPv4 and IPv6', () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -116,6 +117,7 @@ describe('socket', () => {
 
     it('binds to mDNS port 5353', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -135,6 +137,7 @@ describe('socket', () => {
 
     it('configures multicast settings after binding', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -152,6 +155,7 @@ describe('socket', () => {
 
     it('joins IPv4 multicast group 224.0.0.251', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -167,6 +171,7 @@ describe('socket', () => {
 
     it('joins IPv6 multicast group ff02::fb', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -182,6 +187,7 @@ describe('socket', () => {
 
     it('unrefs sockets to not block process exit', () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -195,6 +201,7 @@ describe('socket', () => {
   describe('socket.closed', () => {
     it('returns false when sockets are open', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -209,6 +216,7 @@ describe('socket', () => {
 
     it('returns true after close() is called', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -227,6 +235,7 @@ describe('socket', () => {
   describe('socket.bindings', () => {
     it('returns bindings from both IPv4 and IPv6 interfaces', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -251,6 +260,7 @@ describe('socket', () => {
 
     it('returns empty array after close', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -269,6 +279,7 @@ describe('socket', () => {
   describe('socket.send', () => {
     it('sends message to multicast address on both sockets', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -304,6 +315,7 @@ describe('socket', () => {
 
     it('queues messages and sends them in order', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -338,6 +350,7 @@ describe('socket', () => {
   describe('socket.refresh', () => {
     it('updates multicast memberships when bindings change', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -381,6 +394,7 @@ describe('socket', () => {
 
     it('returns false when bindings have not changed', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -400,6 +414,7 @@ describe('socket', () => {
 
     it('reinitializes closed sockets', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -434,6 +449,7 @@ describe('socket', () => {
   describe('socket.close', () => {
     it('closes both underlying sockets', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -451,6 +467,7 @@ describe('socket', () => {
 
     it('can be called multiple times safely', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -472,6 +489,7 @@ describe('socket', () => {
     it('invokes callback with message and remote info', async () => {
       const onMessage = vi.fn();
       const params: SocketParams = {
+        stack: null,
         onMessage,
       };
 
@@ -508,6 +526,7 @@ describe('socket', () => {
         await rinfo.reply(new Uint8Array([5, 6, 7, 8]));
       });
       const params: SocketParams = {
+        stack: null,
         onMessage,
       };
 
@@ -542,6 +561,7 @@ describe('socket', () => {
     it('handles IPv6 messages correctly', async () => {
       const onMessage = vi.fn();
       const params: SocketParams = {
+        stack: null,
         onMessage,
       };
 
@@ -578,6 +598,7 @@ describe('socket', () => {
         throw new Error('handler error');
       });
       const params: SocketParams = {
+        stack: null,
         onMessage,
       };
 
@@ -606,6 +627,7 @@ describe('socket', () => {
   describe('error handling', () => {
     it('closes socket when multicast setup fails', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -623,6 +645,7 @@ describe('socket', () => {
 
     it('closes socket on socket error after setup', async () => {
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -654,6 +677,7 @@ describe('socket', () => {
       });
 
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 
@@ -670,6 +694,7 @@ describe('socket', () => {
       vi.spyOn(os, 'networkInterfaces').mockReturnValue({});
 
       const params: SocketParams = {
+        stack: null,
         onMessage: vi.fn(),
       };
 

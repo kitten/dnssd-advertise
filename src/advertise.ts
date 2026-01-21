@@ -32,6 +32,8 @@ export interface AdvertiseOptions {
   txt?: Record<string, TxtValue>;
   /** TTL to apply to service records */
   ttl?: number;
+  /** Set to "IPv4" or "IPv6" to run single stack rather than dual stack */
+  stack?: 'IPv4' | 'IPv6' | null;
 }
 
 export interface AdvertiseParams {
@@ -43,6 +45,7 @@ export interface AdvertiseParams {
   subtypes: string[];
   txt: Record<string, TxtValue>;
   ttl: number;
+  stack: 'IPv4' | 'IPv6' | null;
 }
 
 const enum AdvertiserState {
@@ -71,6 +74,7 @@ export function createInterfaceAdvertiser(
   let conflict = ConflictFlag.NONE;
 
   const socket = services.createSocket(iname, {
+    stack: params.stack,
     async onMessage(msg, rinfo) {
       if (state === AdvertiserState.CLOSED) {
         return;
@@ -333,6 +337,12 @@ export function advertiseInternal(
 }
 
 export function advertise(options: AdvertiseOptions): () => Promise<void> {
+  let stack: 'IPv4' | 'IPv6' | null = null;
+  if (options.stack === 'IPv4') {
+    stack = 'IPv4';
+  } else if (options.stack === 'IPv6') {
+    stack = 'IPv6';
+  }
   return advertiseInternal(
     {
       name: options.name,
@@ -343,6 +353,7 @@ export function advertise(options: AdvertiseOptions): () => Promise<void> {
       subtypes: options.subtypes || [],
       txt: options.txt || {},
       ttl: options.ttl || 120,
+      stack,
     },
     defaultServices
   );

@@ -53,6 +53,7 @@ const createTestParams = (
   subtypes: [],
   txt: {},
   ttl: 250,
+  stack: null,
   ...overrides,
 });
 
