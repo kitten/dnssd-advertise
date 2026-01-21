@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.1.1
+
+### Patch Changes
+
+- Sort IPv6 addresses to put link-local address last
+  Submitted by [@kitten](https://github.com/kitten) (See [#19](https://github.com/kitten/dnssd-advertise/pull/19))
+
 ## 1.1.0
 
 ### Minor Changes
