@@ -1,4 +1,4 @@
-import { IPType, type Packet, PacketType, decode } from 'dns-message';
+import { type Packet, PacketType, decode } from 'dns-message';
 
 import type { RemoteInfo } from './socket';
 import { AbortError, TaskKind } from './scheduler';
@@ -74,6 +74,7 @@ export function createInterfaceAdvertiser(
   let conflict = ConflictFlag.NONE;
 
   const socket = services.createSocket(iname, {
+    stack: params.stack,
     async onMessage(msg, rinfo) {
       if (state === AdvertiserState.CLOSED) {
         return;
