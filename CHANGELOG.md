@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.1.0
+
+### Minor Changes
+
+- Add `stack` option to allow IPv4/IPv6-only single stack use
+  Submitted by [@kitten](https://github.com/kitten) (See [#17](https://github.com/kitten/dnssd-advertise/pull/17))
+
 ## 1.0.8
 
 ### Patch Changes
