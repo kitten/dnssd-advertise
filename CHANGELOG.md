@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.1.2
+
+### Patch Changes
+
+- Update rollup config for reduced output and exclude sources from sourcemaps
+  Submitted by [@kitten](https://github.com/kitten) (See [#21](https://github.com/kitten/dnssd-advertise/pull/21))
+
 ## 1.1.1
 
 ### Patch Changes
