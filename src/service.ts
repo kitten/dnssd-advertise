@@ -263,7 +263,9 @@ export const enum ConflictFlag {
 
   HOSTNAME_A = 1 << 1,
   HOSTNAME_AAAA = 1 << 2,
-  HOSTNAME = ConflictFlag.HOSTNAME_A | ConflictFlag.HOSTNAME_AAAA,
+
+  // can't reference itself due to Babel transform-typescript bug
+  HOSTNAME = (1 << 1) | (1 << 2),
 
   LOST_TIEBREAKER = 1 << 3,
 }
