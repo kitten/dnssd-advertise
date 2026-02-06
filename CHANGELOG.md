@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.1.3
+
+### Patch Changes
+
+- ⚠️ Fix self-referential enum value, which Babel's transformer doesn't handle
+  Submitted by [@kitten](https://github.com/kitten) (See [#23](https://github.com/kitten/dnssd-advertise/pull/23))
+
 ## 1.1.2
 
 ### Patch Changes
