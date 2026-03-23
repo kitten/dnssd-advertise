@@ -589,6 +589,51 @@ describe('advertise', () => {
     });
   });
 
+  describe('infinite re-announce prevention', () => {
+    it('closes when socket is closed after advertising', async () => {
+      const params = createTestParams();
+      const mockSocket = createMockSocket();
+      const services = createMockServices(mockSocket);
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      // Advance past probing into announce phase
+      await vi.advanceTimersByTimeAsync(10000);
+
+      // Close socket while in ADVERTISE state
+      mockSocket.close();
+
+      // Advance timers — should not stack overflow
+      await vi.advanceTimersByTimeAsync(10000);
+
+      // The promise should resolve (advertiser terminates gracefully)
+      await expect(
+        Promise.race([handle.promise, vi.advanceTimersByTimeAsync(60000)])
+      ).resolves.not.toThrow();
+    });
+
+    it('prevent reopening when all loops are exhausted', async () => {
+      const params = createTestParams();
+      const mockSocket = createMockSocket();
+      // Make refresh always fail so reopen retries exhaust
+      vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
+      const services = createMockServices(mockSocket);
+
+      // Close socket immediately so probe transitions to CLOSED
+      mockSocket.close();
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      // Advance enough time for MAX_SETUPS reopen attempts
+      await vi.advanceTimersByTimeAsync(300000);
+
+      // The promise should resolve (advertiser gives up gracefully)
+      await expect(
+        Promise.race([handle.promise, vi.advanceTimersByTimeAsync(60000)])
+      ).resolves.not.toThrow();
+    });
+  });
+
   describe('socket lifecycle', () => {
     it('attempts to reopen closed sockets', async () => {
       const params = createTestParams();

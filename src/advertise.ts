@@ -212,6 +212,10 @@ export function createInterfaceAdvertiser(
       }
     }
 
+    if (socket.closed && state === AdvertiserState.ADVERTISE) {
+      state = AdvertiserState.CLOSED;
+    }
+
     return next();
   }
 
@@ -228,6 +232,9 @@ export function createInterfaceAdvertiser(
         }
         state = AdvertiserState.PROBING;
       });
+    }
+    if (state === AdvertiserState.CLOSED) {
+      return;
     }
     return next();
   }
