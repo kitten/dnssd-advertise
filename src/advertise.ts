@@ -233,6 +233,9 @@ export function createInterfaceAdvertiser(
         state = AdvertiserState.PROBING;
       });
     }
+    if (state === AdvertiserState.CLOSED) {
+      return;
+    }
     return next();
   }
 
