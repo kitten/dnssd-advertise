@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.1.4
+
+### Patch Changes
+
+- Prevent probing/advertise loops by entering closed state and transitioning to end state properly
+  Submitted by [@kitten](https://github.com/kitten) (See [#26](https://github.com/kitten/dnssd-advertise/pull/26))
+
 ## 1.1.3
 
 ### Patch Changes
