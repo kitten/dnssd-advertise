@@ -212,6 +212,10 @@ export function createInterfaceAdvertiser(
       }
     }
 
+    if (socket.closed && state === AdvertiserState.ADVERTISE) {
+      state = AdvertiserState.CLOSED;
+    }
+
     return next();
   }
 
