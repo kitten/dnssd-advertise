@@ -37,7 +37,13 @@ export interface Services {
 }
 
 export const defaultServices: Services = {
-  onError() {},
+  onError(error: unknown) {
+    if (typeof process !== 'undefined' && process.stderr?.write) {
+      const message =
+        error instanceof Error ? error.message : String(error);
+      process.stderr.write(`[dnssd-advertise] ${message}\n`);
+    }
+  },
   createSocket,
   createScheduler,
   createServiceInput,

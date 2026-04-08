@@ -34,6 +34,8 @@ export interface AdvertiseOptions {
   ttl?: number;
   /** Set to "IPv4" or "IPv6" to run single stack rather than dual stack */
   stack?: 'IPv4' | 'IPv6' | null;
+  /** Optional error handler for non-fatal errors (defaults to stderr logging) */
+  onError?: (error: unknown) => void;
 }
 
 export interface AdvertiseParams {
@@ -177,8 +179,6 @@ export function createInterfaceAdvertiser(
           : (state = AdvertiserState.CLOSED);
       }
     });
-
-    return next();
   }
 
   async function announce() {
@@ -215,8 +215,6 @@ export function createInterfaceAdvertiser(
     if (socket.closed && state === AdvertiserState.ADVERTISE) {
       state = AdvertiserState.CLOSED;
     }
-
-    return next();
   }
 
   async function reopen() {
@@ -233,20 +231,30 @@ export function createInterfaceAdvertiser(
         state = AdvertiserState.PROBING;
       });
     }
-    if (state === AdvertiserState.CLOSED) {
-      return;
-    }
-    return next();
   }
 
-  function next() {
-    switch (state) {
-      case AdvertiserState.PROBING:
-        return probe();
-      case AdvertiserState.ADVERTISE:
-        return announce();
-      case AdvertiserState.CLOSED:
-        return reopen();
+  const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+  async function run() {
+    let cycles = 0;
+    while (cycles < MAX_SETUPS) {
+      switch (state) {
+        case AdvertiserState.PROBING:
+          await probe();
+          break;
+        case AdvertiserState.ADVERTISE:
+          await announce();
+          break;
+        case AdvertiserState.CLOSED:
+          await reopen();
+          break;
+      }
+      cycles++;
+      // Throttle rapid state transitions to prevent tight loops
+      // when the network is unavailable
+      if (state === AdvertiserState.CLOSED) {
+        await wait(1000);
+      }
     }
   }
 
@@ -255,7 +263,7 @@ export function createInterfaceAdvertiser(
     promise: (async () => {
       try {
         state = AdvertiserState.PROBING;
-        await next();
+        await run();
         scheduler.cancel();
       } catch (error) {
         if (!AbortError.isAbortError(error)) {
@@ -350,6 +358,9 @@ export function advertise(options: AdvertiseOptions): () => Promise<void> {
   } else if (options.stack === 'IPv6') {
     stack = 'IPv6';
   }
+  const services: Services = options.onError
+    ? { ...defaultServices, onError: options.onError }
+    : defaultServices;
   return advertiseInternal(
     {
       name: options.name,
@@ -362,6 +373,6 @@ export function advertise(options: AdvertiseOptions): () => Promise<void> {
       ttl: options.ttl || 120,
       stack,
     },
-    defaultServices
+    services
   );
 }
