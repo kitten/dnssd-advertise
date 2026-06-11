@@ -5,6 +5,7 @@ import { AbortError, TaskKind } from './scheduler';
 import {
   defaultServices,
   REOPEN_FAILURE_LIMIT,
+  REOPEN_INITIAL_FAILURE_LIMIT,
   PROBE_CONFLICT_LIMIT,
   PROBE_FAILURE_LIMIT,
   Services,
@@ -242,11 +243,16 @@ export function createInterfaceAdvertiser(
           return;
         }
         if (!socket.refresh() || socket.closed) {
-          if (++reopenFailures >= REOPEN_FAILURE_LIMIT) {
+          const limit = socket.setup
+            ? REOPEN_FAILURE_LIMIT
+            : REOPEN_INITIAL_FAILURE_LIMIT;
+          if (++reopenFailures >= limit) {
             state = AdvertiserState.FAILED;
             services.onError(
               new Error(
-                `mDNS unavailable on interface "${iname}" after ${reopenFailures} setup attempts`
+                socket.setup
+                  ? `mDNS unavailable on interface "${iname}" after ${reopenFailures} setup attempts`
+                  : `mDNS interface "${iname}" failed initial setup after ${reopenFailures} attempts`
               )
             );
             return;

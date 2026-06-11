@@ -40,6 +40,7 @@ export interface SocketParams {
 
 export interface Socket {
   readonly closed: boolean;
+  readonly setup: boolean;
   readonly bindings: NetworkBinding[];
   send(message: Uint8Array): Promise<void>;
   refresh(): boolean;
@@ -119,6 +120,7 @@ const createInterfaceSocket = (
   const messageQueue: QueuedMessage[] = [];
 
   let timer: Promise<void> | null = null;
+  let setup = false;
   let state: SocketState | null = initSocket();
 
   function initSocket() {
@@ -247,6 +249,7 @@ const createInterfaceSocket = (
       return false;
     } else if (state) {
       state.settings = newSettings;
+      setup = true;
     }
     return hasChanged;
   }
@@ -326,6 +329,9 @@ const createInterfaceSocket = (
     get closed() {
       return !state;
     },
+    get setup() {
+      return setup;
+    },
     get bindings() {
       return state?.settings.bindings ?? [];
     },
@@ -376,6 +382,9 @@ export const createSocket = (iname: string, params: SocketParams): Socket => {
       return dualSocket
         ? [...singleSocket.bindings, ...dualSocket.bindings]
         : singleSocket.bindings;
+    },
+    get setup() {
+      return singleSocket.setup || !!dualSocket?.setup;
     },
     async send(message: Uint8Array) {
       await Promise.all([

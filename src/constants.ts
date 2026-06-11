@@ -26,6 +26,7 @@ export const SCHEDULER_WINDOW = 100;
 export const SCHEDULER_MIN = 20;
 
 export const REOPEN_FAILURE_LIMIT = 5;
+export const REOPEN_INITIAL_FAILURE_LIMIT = 2;
 export const PROBE_CONFLICT_LIMIT = 15;
 export const PROBE_FAILURE_LIMIT = 15;
 
