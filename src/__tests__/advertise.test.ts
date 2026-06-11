@@ -70,7 +70,8 @@ const createTestParams = (
 });
 
 const createMockSocket = (
-  bindings: NetworkBinding[] = createTestBindings()
+  bindings: NetworkBinding[] = createTestBindings(),
+  initialSetup = true
 ): Socket & {
   params: SocketParams | null;
   sentMessages: Uint8Array[];
@@ -81,6 +82,7 @@ const createMockSocket = (
   ) => Promise<void>;
 } => {
   let closed = false;
+  let setup = initialSetup;
   let currentBindings = bindings;
   const sentMessages: Uint8Array[] = [];
 
@@ -99,6 +101,9 @@ const createMockSocket = (
     get bindings() {
       return closed ? [] : currentBindings;
     },
+    get setup() {
+      return setup;
+    },
     params: null,
     sentMessages,
     async send(message: Uint8Array) {
@@ -109,6 +114,7 @@ const createMockSocket = (
     refresh() {
       if (closed) {
         closed = false;
+        setup = true;
         return true;
       }
       return false;
@@ -809,6 +815,50 @@ describe('advertise', () => {
       const errorsBefore = services.errors.length;
       await expect(handle.close()).resolves.toBeUndefined();
       expect(services.errors.length).toBe(errorsBefore);
+    });
+
+    it('fails fast when the socket never successfully set up', async () => {
+      const params = createTestParams();
+      // initialSetup=false models a socket whose initial setupSocket() failed
+      // (e.g., kernel rejected addMembership for IFF_MULTICAST-absent interface)
+      const mockSocket = createMockSocket(undefined, false);
+      vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
+      const services = createMockServices(mockSocket);
+      mockSocket.close();
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      // Bail at ~12s with REOPEN_INITIAL_FAILURE_LIMIT=2 — well under 30s
+      await vi.advanceTimersByTimeAsync(20000);
+      await handle.promise;
+
+      expect(services.errors.length).toBeGreaterThan(0);
+      const message =
+        services.errors[0] instanceof Error
+          ? services.errors[0].message
+          : String(services.errors[0]);
+      expect(message).toContain('en0');
+      expect(message).toContain('initial setup');
+    });
+
+    it('uses the full retry budget once the socket has been set up', async () => {
+      const params = createTestParams();
+      // Default initialSetup=true models an interface that came up at least once
+      const mockSocket = createMockSocket();
+      vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
+      const services = createMockServices(mockSocket);
+      mockSocket.close();
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      // Should NOT have bailed by the fail-fast deadline (~12s)
+      await vi.advanceTimersByTimeAsync(15000);
+      expect(services.errors).toEqual([]);
+
+      // Bails at the full ~30s budget
+      await vi.advanceTimersByTimeAsync(20000);
+      await handle.promise;
+      expect(services.errors.length).toBeGreaterThan(0);
     });
 
     it('preserves bindings on the handle after the advertiser bails', async () => {
