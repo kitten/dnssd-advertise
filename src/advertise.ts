@@ -34,7 +34,7 @@ export interface AdvertiseOptions {
   ttl?: number;
   /** Set to "IPv4" or "IPv6" to run single stack rather than dual stack */
   stack?: 'IPv4' | 'IPv6' | null;
-  /** Optional error handler for non-fatal errors (defaults to stderr logging) */
+  /** Optional handler for non-fatal errors (silent by default) */
   onError?: (error: unknown) => void;
 }
 
