@@ -1,5 +1,16 @@
 # dns-message
 
+## 1.1.5
+
+### Patch Changes
+
+- Reopen NIC if it settled into a failure state, if its network bindings changed (e.g. WiFi disconnects and then reconnects)
+  Submitted by [@kitten](https://github.com/kitten) (See [#31](https://github.com/kitten/dnssd-advertise/pull/31))
+- Prevent call stack exhaustion and prevent unintended infinite reprobing loops
+  Submitted by [@mdo-vertuoza](https://github.com/mdo-vertuoza) (See [#29](https://github.com/kitten/dnssd-advertise/pull/29))
+- Bail faster on setup failures
+  Submitted by [@kitten](https://github.com/kitten) (See [#32](https://github.com/kitten/dnssd-advertise/pull/32))
+
 ## 1.1.4
 
 ### Patch Changes
