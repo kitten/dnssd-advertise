@@ -612,25 +612,25 @@ describe('advertise', () => {
       ).resolves.not.toThrow();
     });
 
-    it('prevent reopening when all loops are exhausted', async () => {
+    it('bails out with onError when interface cannot host mDNS', async () => {
       const params = createTestParams();
       const mockSocket = createMockSocket();
-      // Make refresh always fail so reopen retries exhaust
       vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
       const services = createMockServices(mockSocket);
 
-      // Close socket immediately so probe transitions to CLOSED
       mockSocket.close();
 
       const handle = createInterfaceAdvertiser('en0', params, services);
 
-      // Advance enough time for MAX_SETUPS reopen attempts
-      await vi.advanceTimersByTimeAsync(300000);
+      await vi.advanceTimersByTimeAsync(150000);
+      await handle.promise;
 
-      // The promise should resolve (advertiser gives up gracefully)
-      await expect(
-        Promise.race([handle.promise, vi.advanceTimersByTimeAsync(60000)])
-      ).resolves.not.toThrow();
+      expect(services.errors.length).toBeGreaterThan(0);
+      const message =
+        services.errors[0] instanceof Error
+          ? services.errors[0].message
+          : String(services.errors[0]);
+      expect(message).toContain('en0');
     });
   });
 
