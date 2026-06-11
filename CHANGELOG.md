@@ -1,5 +1,12 @@
 # dns-message
 
+## 1.1.6
+
+### Patch Changes
+
+- Use live network bindings to diff network interface changes
+  Submitted by [@kitten](https://github.com/kitten) (See [#33](https://github.com/kitten/dnssd-advertise/pull/33))
+
 ## 1.1.5
 
 ### Patch Changes
