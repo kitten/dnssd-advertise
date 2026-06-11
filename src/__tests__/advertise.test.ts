@@ -632,6 +632,29 @@ describe('advertise', () => {
           : String(services.errors[0]);
       expect(message).toContain('en0');
     });
+
+    it('bails out when probes never see any traffic across many cycles', async () => {
+      const params = createTestParams();
+      const mockSocket = createMockSocket();
+      // Socket stays open and refresh succeeds, but no messages ever come in,
+      // so probes === 0 every cycle and we oscillate PROBING → CLOSED → reopen
+      // → PROBING forever without the reopen failure path triggering.
+      vi.spyOn(mockSocket, 'refresh').mockReturnValue(true);
+      const services = createMockServices(mockSocket);
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      await vi.advanceTimersByTimeAsync(200000);
+      await handle.promise;
+
+      expect(services.errors.length).toBeGreaterThan(0);
+      const message =
+        services.errors[0] instanceof Error
+          ? services.errors[0].message
+          : String(services.errors[0]);
+      expect(message).toContain('en0');
+      expect(message).toContain('probe');
+    });
   });
 
   describe('socket lifecycle', () => {

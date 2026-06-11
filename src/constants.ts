@@ -27,6 +27,7 @@ export const SCHEDULER_MIN = 20;
 
 export const REOPEN_FAILURE_LIMIT = 15;
 export const PROBE_CONFLICT_LIMIT = 15;
+export const PROBE_FAILURE_LIMIT = 15;
 
 export interface Services {
   onError(error: unknown): void;

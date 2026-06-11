@@ -6,6 +6,7 @@ import {
   defaultServices,
   REOPEN_FAILURE_LIMIT,
   PROBE_CONFLICT_LIMIT,
+  PROBE_FAILURE_LIMIT,
   Services,
 } from './constants';
 import {
@@ -75,6 +76,7 @@ export function createInterfaceAdvertiser(
   const scheduler = services.createScheduler();
 
   let probes = 0;
+  let loops = 0;
   let srv = services.createServiceRecord(input);
   let state = AdvertiserState.PROBING;
   let conflict = ConflictFlag.NONE;
@@ -183,6 +185,19 @@ export function createInterfaceAdvertiser(
           : (state = AdvertiserState.CLOSED);
       }
     });
+
+    if (state === AdvertiserState.ADVERTISE) {
+      loops = 0;
+    } else if (state === AdvertiserState.CLOSED && !socket.closed) {
+      if (++loops >= PROBE_FAILURE_LIMIT) {
+        state = AdvertiserState.FAILED;
+        services.onError(
+          new Error(
+            `mDNS unable to enter advertising state on interface "${iname}" after ${loops} probe attempts`
+          )
+        );
+      }
+    }
   }
 
   async function announce() {
@@ -223,18 +238,18 @@ export function createInterfaceAdvertiser(
 
   async function reopen() {
     scheduler.cancel();
-    let failures = 0;
+    let reopenFailures = 0;
     while (state === AdvertiserState.CLOSED) {
       await scheduler.schedule(TaskKind.REOPEN, async task => {
         if (state !== AdvertiserState.CLOSED) {
           return;
         }
         if (!socket.refresh() || socket.closed) {
-          if (++failures >= REOPEN_FAILURE_LIMIT) {
+          if (++reopenFailures >= REOPEN_FAILURE_LIMIT) {
             state = AdvertiserState.FAILED;
             services.onError(
               new Error(
-                `mDNS unavailable on interface "${iname}" after ${failures} setup attempts`
+                `mDNS unavailable on interface "${iname}" after ${reopenFailures} setup attempts`
               )
             );
             return;
