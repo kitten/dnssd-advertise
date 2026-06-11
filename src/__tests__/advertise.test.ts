@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { bindingKeysMock } = vi.hoisted(() => ({
-  bindingKeysMock: vi.fn<(bindings: unknown[]) => Set<string>>(),
+const { interfaceBindingsMock } = vi.hoisted(() => ({
+  interfaceBindingsMock: vi.fn(),
 }));
 
 vi.mock('../nics', async () => {
   const actual = await vi.importActual<typeof import('../nics')>('../nics');
   return {
     ...actual,
-    interfaceBindingKeys: bindingKeysMock,
+    interfaceBindings: interfaceBindingsMock,
   };
 });
 
@@ -174,13 +174,17 @@ const createMockServices = (
 describe('advertise', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    bindingKeysMock.mockReturnValue(new Set());
+    interfaceBindingsMock.mockImplementation((iname: string, family: IPType) =>
+      createTestBindings().filter(
+        binding => binding.iname === iname && binding.family === family
+      )
+    );
   });
 
   afterEach(() => {
     cancelAll();
     vi.useRealTimers();
-    bindingKeysMock.mockReset();
+    interfaceBindingsMock.mockReset();
   });
 
   describe('createInterfaceAdvertiser', () => {
@@ -611,8 +615,17 @@ describe('advertise', () => {
         return { services, createSocketSpy };
       };
 
+      const setInterfaceBindings = (bindings: NetworkBinding[]) => {
+        interfaceBindingsMock.mockImplementation(
+          (iname: string, family: IPType) =>
+            bindings.filter(
+              binding => binding.iname === iname && binding.family === family
+            )
+        );
+      };
+
       it('retries a FAILED handle when bindings change', async () => {
-        bindingKeysMock.mockReturnValue(new Set(['10.0.0.1/255.255.255.0']));
+        setInterfaceBindings(createTestBindings());
         const { services, createSocketSpy } = buildServices(() => ['en0']);
 
         advertiseInternal(createTestParams(), services);
@@ -624,7 +637,14 @@ describe('advertise', () => {
         await vi.advanceTimersByTimeAsync(7000);
         expect(createSocketSpy).toHaveBeenCalledTimes(1);
 
-        bindingKeysMock.mockReturnValue(new Set(['10.0.0.2/255.255.255.0']));
+        setInterfaceBindings([
+          {
+            ...createTestBindings()[0],
+            address: '192.168.1.101',
+            cidr: '192.168.1.101/24',
+          },
+          createTestBindings()[1],
+        ]);
 
         // Next polling cycle observes the change and recreates
         await vi.advanceTimersByTimeAsync(7000);
@@ -632,7 +652,7 @@ describe('advertise', () => {
       });
 
       it('does not retry when bindings are unchanged', async () => {
-        bindingKeysMock.mockReturnValue(new Set(['10.0.0.1/255.255.255.0']));
+        setInterfaceBindings(createTestBindings());
         const { services, createSocketSpy } = buildServices(() => ['en0']);
 
         advertiseInternal(createTestParams(), services);
@@ -643,7 +663,7 @@ describe('advertise', () => {
       });
 
       it('clears binding state when iname disappears and reappears', async () => {
-        bindingKeysMock.mockReturnValue(new Set(['10.0.0.1/255.255.255.0']));
+        setInterfaceBindings(createTestBindings());
         let interfaces = ['en0'];
         const { services, createSocketSpy } = buildServices(() => interfaces);
 
@@ -664,11 +684,8 @@ describe('advertise', () => {
         expect(createSocketSpy).toHaveBeenCalledTimes(2);
       });
 
-      it('records bindings at settle time, not at the first polling cycle', async () => {
-        // Verifies the .then() hook: bindings change between bail and the next
-        // poll. Without the hook, the change is aliased away by the first
-        // polling observation and we never retry.
-        bindingKeysMock.mockReturnValue(new Set(['fp-at-bail']));
+      it('detects bindings changed between settle and first poll', async () => {
+        setInterfaceBindings(createTestBindings());
         const { services, createSocketSpy } = buildServices(() => ['en0']);
 
         advertiseInternal(createTestParams(), services);
@@ -677,7 +694,14 @@ describe('advertise', () => {
         await vi.advanceTimersByTimeAsync(32000);
 
         // Change bindings before the next polling cycle fires
-        bindingKeysMock.mockReturnValue(new Set(['fp-after-bail']));
+        setInterfaceBindings([
+          {
+            ...createTestBindings()[0],
+            address: '192.168.1.101',
+            cidr: '192.168.1.101/24',
+          },
+          createTestBindings()[1],
+        ]);
 
         await vi.advanceTimersByTimeAsync(10000);
 
@@ -861,9 +885,7 @@ describe('advertise', () => {
       expect(services.errors.length).toBeGreaterThan(0);
     });
 
-    it('preserves bindings on the handle after the advertiser bails', async () => {
-      // Without the finalBindings snapshot, handle.bindings would be empty
-      // post-bail (the IIFE finally has already closed the socket).
+    it('recomputes bindings on the handle after the advertiser bails', async () => {
       const params = createTestParams();
       const mockSocket = createMockSocket();
       vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
