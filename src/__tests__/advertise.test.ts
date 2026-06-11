@@ -1,5 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const { bindingKeysMock } = vi.hoisted(() => ({
+  bindingKeysMock: vi.fn<(bindings: unknown[]) => Set<string>>(),
+}));
+
+vi.mock('../nics', async () => {
+  const actual = await vi.importActual<typeof import('../nics')>('../nics');
+  return {
+    ...actual,
+    interfaceBindingKeys: bindingKeysMock,
+  };
+});
+
 import {
   advertiseInternal,
   createInterfaceAdvertiser,
@@ -156,11 +168,13 @@ const createMockServices = (
 describe('advertise', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    bindingKeysMock.mockReturnValue(new Set());
   });
 
   afterEach(() => {
     cancelAll();
     vi.useRealTimers();
+    bindingKeysMock.mockReset();
   });
 
   describe('createInterfaceAdvertiser', () => {
@@ -558,6 +572,112 @@ describe('advertise', () => {
 
       expect(mockSockets.get('en1')!.closed).toBe(true);
     });
+
+    describe('FAILED interface retry', () => {
+      // Create a mock socket that bails to FAILED quickly: refresh always
+      // fails, socket starts closed.
+      const createBailingSocket = () => {
+        const socket = createMockSocket();
+        vi.spyOn(socket, 'refresh').mockReturnValue(false);
+        socket.close();
+        return socket;
+      };
+
+      const buildServices = (interfaceList: () => string[]) => {
+        const createSocketSpy = vi
+          .fn()
+          .mockImplementation((_iname, socketParams) => {
+            const socket = createBailingSocket();
+            socket.params = socketParams;
+            return socket;
+          });
+        const services: Services = {
+          onError: vi.fn(),
+          createSocket: createSocketSpy,
+          createScheduler,
+          createServiceInput,
+          createServiceRecord,
+          networkInterfaceNames: interfaceList,
+          hostname() {
+            return 'testhost';
+          },
+        };
+        return { services, createSocketSpy };
+      };
+
+      it('retries a FAILED handle when bindings change', async () => {
+        bindingKeysMock.mockReturnValue(new Set(['10.0.0.1/255.255.255.0']));
+        const { services, createSocketSpy } = buildServices(() => ['en0']);
+
+        advertiseInternal(createTestParams(), services);
+        expect(createSocketSpy).toHaveBeenCalledTimes(1);
+
+        // First handle bails to FAILED (~30s via reopen counter)
+        await vi.advanceTimersByTimeAsync(60000);
+        // First polling observation records the bindings
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(createSocketSpy).toHaveBeenCalledTimes(1);
+
+        bindingKeysMock.mockReturnValue(new Set(['10.0.0.2/255.255.255.0']));
+
+        // Next polling cycle observes the change and recreates
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(createSocketSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('does not retry when bindings are unchanged', async () => {
+        bindingKeysMock.mockReturnValue(new Set(['10.0.0.1/255.255.255.0']));
+        const { services, createSocketSpy } = buildServices(() => ['en0']);
+
+        advertiseInternal(createTestParams(), services);
+
+        await vi.advanceTimersByTimeAsync(180000);
+
+        expect(createSocketSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('clears binding state when iname disappears and reappears', async () => {
+        bindingKeysMock.mockReturnValue(new Set(['10.0.0.1/255.255.255.0']));
+        let interfaces = ['en0'];
+        const { services, createSocketSpy } = buildServices(() => interfaces);
+
+        advertiseInternal(createTestParams(), services);
+
+        // Wait for bail + first bindings observation
+        await vi.advanceTimersByTimeAsync(120000);
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(createSocketSpy).toHaveBeenCalledTimes(1);
+
+        interfaces = [];
+        await vi.advanceTimersByTimeAsync(7000);
+
+        // Reappears with identical bindings — without the cleanup, the cached
+        // entry would block recreation
+        interfaces = ['en0'];
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(createSocketSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('records bindings at settle time, not at the first polling cycle', async () => {
+        // Verifies the .then() hook: bindings change between bail and the next
+        // poll. Without the hook, the change is aliased away by the first
+        // polling observation and we never retry.
+        bindingKeysMock.mockReturnValue(new Set(['fp-at-bail']));
+        const { services, createSocketSpy } = buildServices(() => ['en0']);
+
+        advertiseInternal(createTestParams(), services);
+
+        // Advance just past bail (~30s) so the .then() microtask runs
+        await vi.advanceTimersByTimeAsync(32000);
+
+        // Change bindings before the next polling cycle fires
+        bindingKeysMock.mockReturnValue(new Set(['fp-after-bail']));
+
+        await vi.advanceTimersByTimeAsync(10000);
+
+        expect(createSocketSpy).toHaveBeenCalledTimes(2);
+      });
+    });
   });
 
   describe('error handling', () => {
@@ -656,8 +776,8 @@ describe('advertise', () => {
       let refreshCount = 0;
       vi.spyOn(mockSocket, 'refresh').mockImplementation(() => {
         refreshCount++;
-        // 14 failures, then one success, then failures forever
-        return refreshCount === 15 ? realRefresh() : false;
+        // 4 failures, then one success, then failures forever
+        return refreshCount === 5 ? realRefresh() : false;
       });
       const services = createMockServices(mockSocket);
       mockSocket.close();
@@ -665,12 +785,12 @@ describe('advertise', () => {
       const handle = createInterfaceAdvertiser('en0', params, services);
 
       // Without per-call reset, the next failure after the success would push
-      // the counter to 15 and bail at ~97s
-      await vi.advanceTimersByTimeAsync(120000);
+      // the counter to 5 and bail at ~37s
+      await vi.advanceTimersByTimeAsync(45000);
       expect(services.errors).toEqual([]);
 
-      // With per-call reset, bail happens after a fresh 15 failures (~181s)
-      await vi.advanceTimersByTimeAsync(80000);
+      // With per-call reset, bail happens after a fresh 5 failures (~61s)
+      await vi.advanceTimersByTimeAsync(30000);
       await handle.promise;
       expect(services.errors.length).toBeGreaterThan(0);
     });
@@ -689,6 +809,23 @@ describe('advertise', () => {
       const errorsBefore = services.errors.length;
       await expect(handle.close()).resolves.toBeUndefined();
       expect(services.errors.length).toBe(errorsBefore);
+    });
+
+    it('preserves bindings on the handle after the advertiser bails', async () => {
+      // Without the finalBindings snapshot, handle.bindings would be empty
+      // post-bail (the IIFE finally has already closed the socket).
+      const params = createTestParams();
+      const mockSocket = createMockSocket();
+      vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
+      const services = createMockServices(mockSocket);
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      await vi.advanceTimersByTimeAsync(150000);
+      await handle.promise;
+
+      expect(mockSocket.closed).toBe(true);
+      expect(handle.bindings.length).toBeGreaterThan(0);
     });
   });
 

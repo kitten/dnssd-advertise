@@ -46,7 +46,7 @@ export const interfaceBindings = (
     [iname]?.filter(binding => binding.family === family)
     .map(binding => ({ ...binding, family, iname }));
   if (bindings && family === IPType.v6) {
-    bindings?.sort((a, b) => {
+    bindings.sort((a, b) => {
       if (a.address.startsWith('fe80:')) {
         return 1;
       } else if (b.address.startsWith('fe80:')) {
@@ -55,6 +55,8 @@ export const interfaceBindings = (
         return a.address < b.address ? -1 : 1;
       }
     });
+  } else if (bindings && family === IPType.v4) {
+    bindings.sort((a, b) => (a.address < b.address ? -1 : 1));
   }
   return bindings?.length ? bindings : undefined;
 };
@@ -63,6 +65,29 @@ export const hasScopeid = (
   bind: NetworkBinding
 ): bind is NetworkBinding & { scopeid: number } => {
   return bind.scopeid != null && bind.scopeid > 0;
+};
+
+export const interfaceBindingKeys = (
+  bindings: NetworkBinding[]
+): Set<string> => {
+  const keys = new Set<string>();
+  for (const b of bindings) {
+    if (b.family === IPType.v6) {
+      keys.add(`${b.address}/${b.netmask}#${b.scopeid ?? ''}`);
+    } else {
+      keys.add(`${b.address}/${b.netmask}`);
+    }
+  }
+  return keys;
+};
+
+export const compareInterfaceBindingKeys = (
+  a: Set<string>,
+  b: Set<string>
+): boolean => {
+  if (a.size !== b.size) return false;
+  for (const key of a) if (!b.has(key)) return false;
+  return true;
 };
 
 let _hostname: string | undefined;
