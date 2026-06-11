@@ -1,5 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const { bindingKeysMock } = vi.hoisted(() => ({
+  bindingKeysMock: vi.fn<(bindings: unknown[]) => Set<string>>(),
+}));
+
+vi.mock('../nics', async () => {
+  const actual = await vi.importActual<typeof import('../nics')>('../nics');
+  return {
+    ...actual,
+    interfaceBindingKeys: bindingKeysMock,
+  };
+});
+
 import {
   advertiseInternal,
   createInterfaceAdvertiser,
@@ -156,11 +168,13 @@ const createMockServices = (
 describe('advertise', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    bindingKeysMock.mockReturnValue(new Set());
   });
 
   afterEach(() => {
     cancelAll();
     vi.useRealTimers();
+    bindingKeysMock.mockReset();
   });
 
   describe('createInterfaceAdvertiser', () => {
@@ -557,6 +571,92 @@ describe('advertise', () => {
       await vi.advanceTimersByTimeAsync(7000);
 
       expect(mockSockets.get('en1')!.closed).toBe(true);
+    });
+
+    describe('FAILED interface retry', () => {
+      // Create a mock socket that bails to FAILED quickly: refresh always
+      // fails, socket starts closed.
+      const createBailingSocket = () => {
+        const socket = createMockSocket();
+        vi.spyOn(socket, 'refresh').mockReturnValue(false);
+        socket.close();
+        return socket;
+      };
+
+      const buildServices = (interfaceList: () => string[]) => {
+        const createSocketSpy = vi
+          .fn()
+          .mockImplementation((_iname, socketParams) => {
+            const socket = createBailingSocket();
+            socket.params = socketParams;
+            return socket;
+          });
+        const services: Services = {
+          onError: vi.fn(),
+          createSocket: createSocketSpy,
+          createScheduler,
+          createServiceInput,
+          createServiceRecord,
+          networkInterfaceNames: interfaceList,
+          hostname() {
+            return 'testhost';
+          },
+        };
+        return { services, createSocketSpy };
+      };
+
+      it('retries a FAILED handle when bindings change', async () => {
+        bindingKeysMock.mockReturnValue(new Set(['10.0.0.1/255.255.255.0']));
+        const { services, createSocketSpy } = buildServices(() => ['en0']);
+
+        advertiseInternal(createTestParams(), services);
+        expect(createSocketSpy).toHaveBeenCalledTimes(1);
+
+        // First handle bails to FAILED (~90s via reopen counter)
+        await vi.advanceTimersByTimeAsync(120000);
+        // First polling observation records the bindings
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(createSocketSpy).toHaveBeenCalledTimes(1);
+
+        bindingKeysMock.mockReturnValue(new Set(['10.0.0.2/255.255.255.0']));
+
+        // Next polling cycle observes the change and recreates
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(createSocketSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('does not retry when bindings are unchanged', async () => {
+        bindingKeysMock.mockReturnValue(new Set(['10.0.0.1/255.255.255.0']));
+        const { services, createSocketSpy } = buildServices(() => ['en0']);
+
+        advertiseInternal(createTestParams(), services);
+
+        await vi.advanceTimersByTimeAsync(180000);
+
+        expect(createSocketSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('clears binding state when iname disappears and reappears', async () => {
+        bindingKeysMock.mockReturnValue(new Set(['10.0.0.1/255.255.255.0']));
+        let interfaces = ['en0'];
+        const { services, createSocketSpy } = buildServices(() => interfaces);
+
+        advertiseInternal(createTestParams(), services);
+
+        // Wait for bail + first bindings observation
+        await vi.advanceTimersByTimeAsync(120000);
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(createSocketSpy).toHaveBeenCalledTimes(1);
+
+        interfaces = [];
+        await vi.advanceTimersByTimeAsync(7000);
+
+        // Reappears with identical bindings — without the cleanup, the cached
+        // entry would block recreation
+        interfaces = ['en0'];
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(createSocketSpy).toHaveBeenCalledTimes(2);
+      });
     });
   });
 
