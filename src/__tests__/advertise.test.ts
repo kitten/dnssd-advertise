@@ -644,7 +644,7 @@ describe('advertise', () => {
 
       const handle = createInterfaceAdvertiser('en0', params, services);
 
-      await vi.advanceTimersByTimeAsync(200000);
+      await vi.advanceTimersByTimeAsync(300000);
       await handle.promise;
 
       expect(services.errors.length).toBeGreaterThan(0);
@@ -653,7 +653,7 @@ describe('advertise', () => {
           ? services.errors[0].message
           : String(services.errors[0]);
       expect(message).toContain('en0');
-      expect(message).toContain('probe');
+      expect(message).toContain('state cycles');
     });
   });
 

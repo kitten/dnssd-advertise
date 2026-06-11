@@ -103,6 +103,7 @@ export function createInterfaceAdvertiser(
         conflict = checkResponseConflicts(packet, srv, socket.bindings);
         if (resolveConflicts()) {
           state = AdvertiserState.PROBING;
+          loops = 0;
         } else {
           try {
             await sendReply(packet, rinfo);
@@ -185,19 +186,6 @@ export function createInterfaceAdvertiser(
           : (state = AdvertiserState.CLOSED);
       }
     });
-
-    if (state === AdvertiserState.ADVERTISE) {
-      loops = 0;
-    } else if (state === AdvertiserState.CLOSED && !socket.closed) {
-      if (++loops >= PROBE_FAILURE_LIMIT) {
-        state = AdvertiserState.FAILED;
-        services.onError(
-          new Error(
-            `mDNS unable to enter advertising state on interface "${iname}" after ${loops} probe attempts`
-          )
-        );
-      }
-    }
   }
 
   async function announce() {
@@ -275,6 +263,16 @@ export function createInterfaceAdvertiser(
           break;
         case AdvertiserState.FAILED:
           return;
+      }
+      if (state === AdvertiserState.CLOSED) {
+        if (++loops >= PROBE_FAILURE_LIMIT) {
+          state = AdvertiserState.FAILED;
+          services.onError(
+            new Error(
+              `mDNS unable to maintain stable advertising on interface "${iname}" after ${loops} state cycles`
+            )
+          );
+        }
       }
     }
   }
