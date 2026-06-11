@@ -612,8 +612,8 @@ describe('advertise', () => {
         advertiseInternal(createTestParams(), services);
         expect(createSocketSpy).toHaveBeenCalledTimes(1);
 
-        // First handle bails to FAILED (~90s via reopen counter)
-        await vi.advanceTimersByTimeAsync(120000);
+        // First handle bails to FAILED (~30s via reopen counter)
+        await vi.advanceTimersByTimeAsync(60000);
         // First polling observation records the bindings
         await vi.advanceTimersByTimeAsync(7000);
         expect(createSocketSpy).toHaveBeenCalledTimes(1);
@@ -667,8 +667,8 @@ describe('advertise', () => {
 
         advertiseInternal(createTestParams(), services);
 
-        // Advance just past bail so the .then() microtask runs
-        await vi.advanceTimersByTimeAsync(92000);
+        // Advance just past bail (~30s) so the .then() microtask runs
+        await vi.advanceTimersByTimeAsync(32000);
 
         // Change bindings before the next polling cycle fires
         bindingKeysMock.mockReturnValue(new Set(['fp-after-bail']));
@@ -776,8 +776,8 @@ describe('advertise', () => {
       let refreshCount = 0;
       vi.spyOn(mockSocket, 'refresh').mockImplementation(() => {
         refreshCount++;
-        // 14 failures, then one success, then failures forever
-        return refreshCount === 15 ? realRefresh() : false;
+        // 4 failures, then one success, then failures forever
+        return refreshCount === 5 ? realRefresh() : false;
       });
       const services = createMockServices(mockSocket);
       mockSocket.close();
@@ -785,12 +785,12 @@ describe('advertise', () => {
       const handle = createInterfaceAdvertiser('en0', params, services);
 
       // Without per-call reset, the next failure after the success would push
-      // the counter to 15 and bail at ~97s
-      await vi.advanceTimersByTimeAsync(120000);
+      // the counter to 5 and bail at ~37s
+      await vi.advanceTimersByTimeAsync(45000);
       expect(services.errors).toEqual([]);
 
-      // With per-call reset, bail happens after a fresh 15 failures (~181s)
-      await vi.advanceTimersByTimeAsync(80000);
+      // With per-call reset, bail happens after a fresh 5 failures (~61s)
+      await vi.advanceTimersByTimeAsync(30000);
       await handle.promise;
       expect(services.errors.length).toBeGreaterThan(0);
     });
