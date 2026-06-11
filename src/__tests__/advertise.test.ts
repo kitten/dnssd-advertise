@@ -657,6 +657,26 @@ describe('advertise', () => {
         await vi.advanceTimersByTimeAsync(7000);
         expect(createSocketSpy).toHaveBeenCalledTimes(2);
       });
+
+      it('records bindings at settle time, not at the first polling cycle', async () => {
+        // Verifies the .then() hook: bindings change between bail and the next
+        // poll. Without the hook, the change is aliased away by the first
+        // polling observation and we never retry.
+        bindingKeysMock.mockReturnValue(new Set(['fp-at-bail']));
+        const { services, createSocketSpy } = buildServices(() => ['en0']);
+
+        advertiseInternal(createTestParams(), services);
+
+        // Advance just past bail so the .then() microtask runs
+        await vi.advanceTimersByTimeAsync(92000);
+
+        // Change bindings before the next polling cycle fires
+        bindingKeysMock.mockReturnValue(new Set(['fp-after-bail']));
+
+        await vi.advanceTimersByTimeAsync(10000);
+
+        expect(createSocketSpy).toHaveBeenCalledTimes(2);
+      });
     });
   });
 
@@ -789,6 +809,23 @@ describe('advertise', () => {
       const errorsBefore = services.errors.length;
       await expect(handle.close()).resolves.toBeUndefined();
       expect(services.errors.length).toBe(errorsBefore);
+    });
+
+    it('preserves bindings on the handle after the advertiser bails', async () => {
+      // Without the finalBindings snapshot, handle.bindings would be empty
+      // post-bail (the IIFE finally has already closed the socket).
+      const params = createTestParams();
+      const mockSocket = createMockSocket();
+      vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
+      const services = createMockServices(mockSocket);
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      await vi.advanceTimersByTimeAsync(150000);
+      await handle.promise;
+
+      expect(mockSocket.closed).toBe(true);
+      expect(handle.bindings.length).toBeGreaterThan(0);
     });
   });
 
