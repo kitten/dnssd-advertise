@@ -233,11 +233,8 @@ export function createInterfaceAdvertiser(
     }
   }
 
-  const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-
   async function run() {
-    let cycles = 0;
-    while (cycles < MAX_SETUPS) {
+    while (true) {
       switch (state) {
         case AdvertiserState.PROBING:
           await probe();
@@ -248,12 +245,6 @@ export function createInterfaceAdvertiser(
         case AdvertiserState.CLOSED:
           await reopen();
           break;
-      }
-      cycles++;
-      // Throttle rapid state transitions to prevent tight loops
-      // when the network is unavailable
-      if (state === AdvertiserState.CLOSED) {
-        await wait(1000);
       }
     }
   }
