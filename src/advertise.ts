@@ -9,6 +9,13 @@ import {
   PROBE_FAILURE_LIMIT,
   Services,
 } from './constants';
+
+import {
+  interfaceBindingKeys,
+  compareInterfaceBindingKeys,
+  NetworkBinding,
+} from './nics';
+
 import {
   TxtValue,
   ConflictFlag,
@@ -64,6 +71,8 @@ const enum AdvertiserState {
 
 export interface AdvertiserHandle {
   readonly promise: Promise<void>;
+  readonly settled: boolean;
+  readonly bindings: NetworkBinding[];
   close(): Promise<void>;
 }
 
@@ -278,6 +287,8 @@ export function createInterfaceAdvertiser(
   }
 
   let closed = false;
+  let settled = false;
+  let finalBindings: NetworkBinding[] = [];
   return {
     promise: (async () => {
       try {
@@ -289,12 +300,22 @@ export function createInterfaceAdvertiser(
           services.onError(error);
         }
       } finally {
+        settled = true;
         if (!closed) {
+          // Snapshot bindings before socket.close() so the polling hook can
+          // observe the state at bail time.
+          finalBindings = socket.bindings;
           socket.close();
           scheduler.cancel();
         }
       }
     })(),
+    get settled() {
+      return settled;
+    },
+    get bindings() {
+      return settled ? finalBindings : socket.bindings;
+    },
     async close() {
       try {
         closed = true;
@@ -326,28 +347,58 @@ export function advertiseInternal(
 ): () => Promise<void> {
   const inames = new Set(services.networkInterfaceNames());
   const handles = new Map<string, AdvertiserHandle>();
+  const bindingKeys = new Map<string, Set<string>>();
   const scheduler = services.createScheduler();
 
+  const createHandle = (iname: string): AdvertiserHandle => {
+    const handle = createInterfaceAdvertiser(iname, params, services);
+    handle.promise
+      .then(() => {
+        if (handles.get(iname) === handle) {
+          bindingKeys.set(iname, interfaceBindingKeys(handle.bindings));
+        }
+      })
+      .catch(error => {
+        if (!AbortError.isAbortError(error)) {
+          services.onError(error);
+        }
+      });
+    return handle;
+  };
+
   for (const iname of inames) {
-    handles.set(iname, createInterfaceAdvertiser(iname, params, services));
+    handles.set(iname, createHandle(iname));
   }
 
   scheduler
     .schedule(TaskKind.REOPEN, task => {
       try {
         const inames = new Set(services.networkInterfaceNames());
-        for (const iname of inames) {
-          if (!handles.has(iname)) {
-            handles.set(
-              iname,
-              createInterfaceAdvertiser(iname, params, services)
-            );
-          }
-        }
+
         for (const [iname, handle] of handles) {
           if (!inames.has(iname)) {
             handles.delete(iname);
+            bindingKeys.delete(iname);
             handle.close();
+          }
+        }
+
+        for (const [iname, handle] of handles) {
+          if (handle.settled) {
+            const currentKeys = interfaceBindingKeys(handle.bindings);
+            const prevKeys = bindingKeys.get(iname);
+            if (prevKeys === undefined) {
+              bindingKeys.set(iname, currentKeys);
+            } else if (!compareInterfaceBindingKeys(prevKeys, currentKeys)) {
+              handles.delete(iname);
+              bindingKeys.delete(iname);
+            }
+          }
+        }
+
+        for (const iname of inames) {
+          if (!handles.has(iname)) {
+            handles.set(iname, createHandle(iname));
           }
         }
       } catch (error) {
