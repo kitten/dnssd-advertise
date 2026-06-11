@@ -590,47 +590,105 @@ describe('advertise', () => {
   });
 
   describe('infinite re-announce prevention', () => {
-    it('closes when socket is closed after advertising', async () => {
+    it('does not loop forever or stack overflow when socket is closed during operation', async () => {
       const params = createTestParams();
       const mockSocket = createMockSocket();
       const services = createMockServices(mockSocket);
 
       const handle = createInterfaceAdvertiser('en0', params, services);
 
-      // Advance past probing into announce phase
       await vi.advanceTimersByTimeAsync(10000);
-
-      // Close socket while in ADVERTISE state
       mockSocket.close();
 
-      // Advance timers — should not stack overflow
-      await vi.advanceTimersByTimeAsync(10000);
+      // No race-against-timer: a regression that re-introduces a loop hangs the test
+      await vi.advanceTimersByTimeAsync(200000);
+      await handle.promise;
 
-      // The promise should resolve (advertiser terminates gracefully)
-      await expect(
-        Promise.race([handle.promise, vi.advanceTimersByTimeAsync(60000)])
-      ).resolves.not.toThrow();
+      expect(services.errors.length).toBeGreaterThan(0);
     });
 
-    it('prevent reopening when all loops are exhausted', async () => {
+    it('bails out with onError when interface cannot host mDNS', async () => {
       const params = createTestParams();
       const mockSocket = createMockSocket();
-      // Make refresh always fail so reopen retries exhaust
       vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
       const services = createMockServices(mockSocket);
 
-      // Close socket immediately so probe transitions to CLOSED
       mockSocket.close();
 
       const handle = createInterfaceAdvertiser('en0', params, services);
 
-      // Advance enough time for MAX_SETUPS reopen attempts
-      await vi.advanceTimersByTimeAsync(300000);
+      await vi.advanceTimersByTimeAsync(150000);
+      await handle.promise;
 
-      // The promise should resolve (advertiser gives up gracefully)
-      await expect(
-        Promise.race([handle.promise, vi.advanceTimersByTimeAsync(60000)])
-      ).resolves.not.toThrow();
+      expect(services.errors.length).toBeGreaterThan(0);
+      const message =
+        services.errors[0] instanceof Error
+          ? services.errors[0].message
+          : String(services.errors[0]);
+      expect(message).toContain('en0');
+    });
+
+    it('bails out when probes never see any traffic across many cycles', async () => {
+      const params = createTestParams();
+      const mockSocket = createMockSocket();
+      // refresh always succeeds, so only the loops counter can bail
+      vi.spyOn(mockSocket, 'refresh').mockReturnValue(true);
+      const services = createMockServices(mockSocket);
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      await vi.advanceTimersByTimeAsync(300000);
+      await handle.promise;
+
+      expect(services.errors.length).toBeGreaterThan(0);
+      const message =
+        services.errors[0] instanceof Error
+          ? services.errors[0].message
+          : String(services.errors[0]);
+      expect(message).toContain('en0');
+      expect(message).toContain('state cycles');
+    });
+
+    it('resets reopen failure count between calls', async () => {
+      const params = createTestParams();
+      const mockSocket = createMockSocket();
+      const realRefresh = mockSocket.refresh.bind(mockSocket);
+      let refreshCount = 0;
+      vi.spyOn(mockSocket, 'refresh').mockImplementation(() => {
+        refreshCount++;
+        // 14 failures, then one success, then failures forever
+        return refreshCount === 15 ? realRefresh() : false;
+      });
+      const services = createMockServices(mockSocket);
+      mockSocket.close();
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      // Without per-call reset, the next failure after the success would push
+      // the counter to 15 and bail at ~97s
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(services.errors).toEqual([]);
+
+      // With per-call reset, bail happens after a fresh 15 failures (~181s)
+      await vi.advanceTimersByTimeAsync(80000);
+      await handle.promise;
+      expect(services.errors.length).toBeGreaterThan(0);
+    });
+
+    it('close() is safe after the advertiser has bailed to FAILED', async () => {
+      const params = createTestParams();
+      const mockSocket = createMockSocket();
+      vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
+      const services = createMockServices(mockSocket);
+      mockSocket.close();
+
+      const handle = createInterfaceAdvertiser('en0', params, services);
+      await vi.advanceTimersByTimeAsync(150000);
+      await handle.promise;
+
+      const errorsBefore = services.errors.length;
+      await expect(handle.close()).resolves.toBeUndefined();
+      expect(services.errors.length).toBe(errorsBefore);
     });
   });
 
@@ -649,6 +707,151 @@ describe('advertise', () => {
       await vi.advanceTimersByTimeAsync(10000);
 
       expect(refreshSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('stable advertising', () => {
+    // Mock has no loopback — probes need explicit injection to reach ADVERTISE
+    const benignProbePacket = () =>
+      encode({
+        type: PacketType.RESPONSE,
+        answers: [],
+      });
+
+    it('reaches ADVERTISE and sends announcements when probes are received', async () => {
+      const params = createTestParams();
+      const services = createMockServices();
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      await services.mockSocket.simulateMessage(
+        Buffer.from(benignProbePacket()),
+        '192.168.1.50',
+        5353
+      );
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const decoded = services.mockSocket.sentMessages.map(decode);
+      const hasAnnouncement = decoded.some(p => p.type === PacketType.RESPONSE);
+      expect(hasAnnouncement).toBe(true);
+
+      handle.close();
+      await vi.runAllTimersAsync();
+    });
+
+    it('does not bail during sustained healthy advertising', async () => {
+      const params = createTestParams();
+      const services = createMockServices();
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      await services.mockSocket.simulateMessage(
+        Buffer.from(benignProbePacket()),
+        '192.168.1.50',
+        5353
+      );
+
+      await vi.advanceTimersByTimeAsync(300000);
+
+      expect(services.errors).toEqual([]);
+
+      handle.close();
+      await vi.runAllTimersAsync();
+    });
+
+    it('sends a goodbye when close() is called during ADVERTISE', async () => {
+      const params = createTestParams();
+      const services = createMockServices();
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      await services.mockSocket.simulateMessage(
+        Buffer.from(benignProbePacket()),
+        '192.168.1.50',
+        5353
+      );
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const beforeClose = services.mockSocket.sentMessages.length;
+      const closePromise = handle.close();
+      await vi.advanceTimersByTimeAsync(500);
+      await closePromise;
+
+      expect(services.mockSocket.sentMessages.length).toBeGreaterThan(
+        beforeClose
+      );
+    });
+
+    it('re-probes and keeps running after conflict during ADVERTISE', async () => {
+      const params = createTestParams();
+      const services = createMockServices();
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      await services.mockSocket.simulateMessage(
+        Buffer.from(benignProbePacket()),
+        '192.168.1.50',
+        5353
+      );
+      await vi.advanceTimersByTimeAsync(2000);
+      const messagesAfterAdvertise = services.mockSocket.sentMessages.length;
+
+      const conflictPacket = encode({
+        type: PacketType.RESPONSE,
+        flags: PacketFlag.AUTHORITATIVE_ANSWER,
+        answers: [
+          {
+            type: RecordType.SRV,
+            class: RecordClass.IN,
+            name: 'test service._http._tcp.local',
+            ttl: 120,
+            flush: true,
+            data: {
+              priority: 0,
+              weight: 0,
+              port: 9999,
+              target: 'otherhost.local',
+            },
+          },
+        ],
+      });
+      await services.mockSocket.simulateMessage(
+        Buffer.from(conflictPacket),
+        '192.168.1.50',
+        5353
+      );
+      // announce must wind down before probe restarts
+      await vi.advanceTimersByTimeAsync(20000);
+
+      const newDecoded = services.mockSocket.sentMessages
+        .slice(messagesAfterAdvertise)
+        .map(decode);
+      expect(newDecoded.some(p => p.type === PacketType.QUERY)).toBe(true);
+      expect(services.errors).toEqual([]);
+
+      const closePromise = handle.close();
+      await vi.advanceTimersByTimeAsync(500);
+      await closePromise;
+    });
+
+    it('bails when ADVERTISE is interrupted by a socket close', async () => {
+      const params = createTestParams();
+      const mockSocket = createMockSocket();
+      // Prevent the announce-time refresh from auto-recovering the socket
+      vi.spyOn(mockSocket, 'refresh').mockReturnValue(false);
+      const services = createMockServices(mockSocket);
+      const handle = createInterfaceAdvertiser('en0', params, services);
+
+      await services.mockSocket.simulateMessage(
+        Buffer.from(benignProbePacket()),
+        '192.168.1.50',
+        5353
+      );
+      await vi.advanceTimersByTimeAsync(2000);
+
+      services.mockSocket.close();
+
+      await vi.advanceTimersByTimeAsync(200000);
+      await handle.promise;
+
+      expect(services.errors.length).toBeGreaterThan(0);
     });
   });
 });

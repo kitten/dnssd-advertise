@@ -2,8 +2,13 @@ import { type Packet, PacketType, decode } from 'dns-message';
 
 import type { RemoteInfo } from './socket';
 import { AbortError, TaskKind } from './scheduler';
-import { MAX_SETUPS, defaultServices, Services } from './constants';
-
+import {
+  defaultServices,
+  REOPEN_FAILURE_LIMIT,
+  PROBE_CONFLICT_LIMIT,
+  PROBE_FAILURE_LIMIT,
+  Services,
+} from './constants';
 import {
   TxtValue,
   ConflictFlag,
@@ -34,6 +39,8 @@ export interface AdvertiseOptions {
   ttl?: number;
   /** Set to "IPv4" or "IPv6" to run single stack rather than dual stack */
   stack?: 'IPv4' | 'IPv6' | null;
+  /** Optional handler for non-fatal errors (silent by default) */
+  onError?: (error: unknown) => void;
 }
 
 export interface AdvertiseParams {
@@ -52,6 +59,7 @@ const enum AdvertiserState {
   PROBING = 0,
   ADVERTISE = 2,
   CLOSED = 3,
+  FAILED = 4,
 }
 
 export interface AdvertiserHandle {
@@ -67,8 +75,8 @@ export function createInterfaceAdvertiser(
   const input = services.createServiceInput(params);
   const scheduler = services.createScheduler();
 
-  let loops = 0;
   let probes = 0;
+  let loops = 0;
   let srv = services.createServiceRecord(input);
   let state = AdvertiserState.PROBING;
   let conflict = ConflictFlag.NONE;
@@ -95,6 +103,7 @@ export function createInterfaceAdvertiser(
         conflict = checkResponseConflicts(packet, srv, socket.bindings);
         if (resolveConflicts()) {
           state = AdvertiserState.PROBING;
+          loops = 0;
         } else {
           try {
             await sendReply(packet, rinfo);
@@ -147,10 +156,10 @@ export function createInterfaceAdvertiser(
   }
 
   async function probe() {
-    loops = 0;
     probes = 0;
     conflict = ConflictFlag.NONE;
 
+    let conflicts = 0;
     let maxAttempts = 3;
     await scheduler.schedule(TaskKind.PROBE, async task => {
       const hasLostTiebreaker = conflict & ConflictFlag.LOST_TIEBREAKER;
@@ -161,7 +170,7 @@ export function createInterfaceAdvertiser(
         return;
       } else if (resolveConflicts()) {
         maxAttempts += 4;
-        if (++loops < MAX_SETUPS) {
+        if (++conflicts < PROBE_CONFLICT_LIMIT) {
           return task.retry(hasLostTiebreaker ? 1000 : undefined);
         } else {
           state = AdvertiserState.CLOSED;
@@ -177,8 +186,6 @@ export function createInterfaceAdvertiser(
           : (state = AdvertiserState.CLOSED);
       }
     });
-
-    return next();
   }
 
   async function announce() {
@@ -215,38 +222,58 @@ export function createInterfaceAdvertiser(
     if (socket.closed && state === AdvertiserState.ADVERTISE) {
       state = AdvertiserState.CLOSED;
     }
-
-    return next();
   }
 
   async function reopen() {
     scheduler.cancel();
-    while (state === AdvertiserState.CLOSED && loops < MAX_SETUPS) {
-      loops++;
+    let reopenFailures = 0;
+    while (state === AdvertiserState.CLOSED) {
       await scheduler.schedule(TaskKind.REOPEN, async task => {
         if (state !== AdvertiserState.CLOSED) {
           return;
         }
         if (!socket.refresh() || socket.closed) {
+          if (++reopenFailures >= REOPEN_FAILURE_LIMIT) {
+            state = AdvertiserState.FAILED;
+            services.onError(
+              new Error(
+                `mDNS unavailable on interface "${iname}" after ${reopenFailures} setup attempts`
+              )
+            );
+            return;
+          }
           return task.retry();
         }
         state = AdvertiserState.PROBING;
       });
     }
-    if (state === AdvertiserState.CLOSED) {
-      return;
-    }
-    return next();
   }
 
-  function next() {
-    switch (state) {
-      case AdvertiserState.PROBING:
-        return probe();
-      case AdvertiserState.ADVERTISE:
-        return announce();
-      case AdvertiserState.CLOSED:
-        return reopen();
+  async function run() {
+    while (true) {
+      switch (state) {
+        case AdvertiserState.PROBING:
+          await probe();
+          break;
+        case AdvertiserState.ADVERTISE:
+          await announce();
+          break;
+        case AdvertiserState.CLOSED:
+          await reopen();
+          break;
+        case AdvertiserState.FAILED:
+          return;
+      }
+      if (state === AdvertiserState.CLOSED) {
+        if (++loops >= PROBE_FAILURE_LIMIT) {
+          state = AdvertiserState.FAILED;
+          services.onError(
+            new Error(
+              `mDNS unable to maintain stable advertising on interface "${iname}" after ${loops} state cycles`
+            )
+          );
+        }
+      }
     }
   }
 
@@ -255,7 +282,7 @@ export function createInterfaceAdvertiser(
     promise: (async () => {
       try {
         state = AdvertiserState.PROBING;
-        await next();
+        await run();
         scheduler.cancel();
       } catch (error) {
         if (!AbortError.isAbortError(error)) {
@@ -272,9 +299,14 @@ export function createInterfaceAdvertiser(
       try {
         closed = true;
         scheduler.cancel();
-        if (state !== AdvertiserState.CLOSED) {
+        if (
+          state === AdvertiserState.PROBING ||
+          state === AdvertiserState.ADVERTISE
+        ) {
           state = AdvertiserState.CLOSED;
           await sendGoodbye();
+        } else {
+          state = AdvertiserState.CLOSED;
         }
       } catch (error) {
         if (!AbortError.isAbortError(error)) {
@@ -350,6 +382,9 @@ export function advertise(options: AdvertiseOptions): () => Promise<void> {
   } else if (options.stack === 'IPv6') {
     stack = 'IPv6';
   }
+  const services: Services = options.onError
+    ? { ...defaultServices, onError: options.onError }
+    : defaultServices;
   return advertiseInternal(
     {
       name: options.name,
@@ -362,6 +397,6 @@ export function advertise(options: AdvertiseOptions): () => Promise<void> {
       ttl: options.ttl || 120,
       stack,
     },
-    defaultServices
+    services
   );
 }

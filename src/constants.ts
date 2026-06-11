@@ -22,9 +22,12 @@ export enum MDNSAddress {
 export const LABEL_LENGTH = 63;
 export const MDNS_PORT = 5353;
 export const DNSSD_NAME = '_services._dns-sd._udp.local';
-export const MAX_SETUPS = 15;
 export const SCHEDULER_WINDOW = 100;
 export const SCHEDULER_MIN = 20;
+
+export const REOPEN_FAILURE_LIMIT = 15;
+export const PROBE_CONFLICT_LIMIT = 15;
+export const PROBE_FAILURE_LIMIT = 15;
 
 export interface Services {
   onError(error: unknown): void;
@@ -37,7 +40,7 @@ export interface Services {
 }
 
 export const defaultServices: Services = {
-  onError() {},
+  onError(_error: unknown) {},
   createSocket,
   createScheduler,
   createServiceInput,
