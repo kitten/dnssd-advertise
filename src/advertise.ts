@@ -8,6 +8,7 @@ import {
   REOPEN_INITIAL_FAILURE_LIMIT,
   PROBE_CONFLICT_LIMIT,
   PROBE_FAILURE_LIMIT,
+  IPType,
   Services,
 } from './constants';
 
@@ -15,6 +16,7 @@ import {
   interfaceBindingKeys,
   compareInterfaceBindingKeys,
   NetworkBinding,
+  interfaceBindings,
 } from './nics';
 
 import {
@@ -294,7 +296,6 @@ export function createInterfaceAdvertiser(
 
   let closed = false;
   let settled = false;
-  let finalBindings: NetworkBinding[] = [];
   return {
     promise: (async () => {
       try {
@@ -308,9 +309,6 @@ export function createInterfaceAdvertiser(
       } finally {
         settled = true;
         if (!closed) {
-          // Snapshot bindings before socket.close() so the polling hook can
-          // observe the state at bail time.
-          finalBindings = socket.bindings;
           socket.close();
           scheduler.cancel();
         }
@@ -320,7 +318,18 @@ export function createInterfaceAdvertiser(
       return settled;
     },
     get bindings() {
-      return settled ? finalBindings : socket.bindings;
+      if (!settled && !socket.closed) {
+        return socket.bindings;
+      } else if (params.stack === 'IPv4') {
+        return interfaceBindings(iname, IPType.v4) ?? [];
+      } else if (params.stack === 'IPv6') {
+        return interfaceBindings(iname, IPType.v6) ?? [];
+      } else {
+        return [
+          ...(interfaceBindings(iname, IPType.v4) ?? []),
+          ...(interfaceBindings(iname, IPType.v6) ?? []),
+        ];
+      }
     },
     async close() {
       try {
